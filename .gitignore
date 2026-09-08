@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+
+# Builds
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Ambiente
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testes / cobertura
+coverage/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# PWA gerado
+apps/web/dev-dist/

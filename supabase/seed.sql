@@ -1,0 +1,21 @@
+-- =============================================================================
+-- seed.sql
+-- Dados de desenvolvimento aplicados por `supabase db reset` após as migrações.
+--
+-- Este arquivo será preenchido conforme as migrações forem criadas.
+-- Conteúdo previsto (ver docs/plano-banco-de-dados.md):
+--
+--   1. Tenant de exemplo: "Instituto Mauá de Tecnologia" (slug: maua)
+--   2. Campus: "São Caetano do Sul" com coordenadas centrais
+--   3. Cursos: Engenharia Química, Engenharia de Computação, Administração, Design
+--   4. Perfis: admin, secretaria, 2 coordenadores (vinculados a cursos), embaixador
+--      (usuários criados em auth.users via supabase.auth.admin ou inserção direta)
+--   5. Regras de disponibilidade dos coordenadores (seg-sex, 09h-12h e 14h-17h)
+--   6. Leads de exemplo com status variados
+--   7. Templates de mensagem padrão (confirmação, lembrete véspera, pós-visita)
+--   8. Régua de comunicação padrão do tenant
+--   9. POIs de exemplo (laboratórios, biblioteca, praça de alimentação)
+--  10. Plano SaaS de exemplo e limites
+-- =============================================================================
+
+-- select 'seed vazio - aguardando migrações de domínio';

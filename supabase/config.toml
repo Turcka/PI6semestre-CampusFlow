@@ -1,0 +1,68 @@
+# Configuração do Supabase CLI para desenvolvimento local.
+# Referência: https://supabase.com/docs/guides/local-development/cli/config
+# Gere a versão completa com `supabase init` caso precise de todas as chaves.
+
+project_id = "campusflow"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public", "pgmq_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[inbucket]
+# Captura e-mails de Auth em desenvolvimento
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.buckets.poi-photos]
+public = true
+file_size_limit = "10MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/webp"]
+
+[storage.buckets.tenant-assets]
+public = true
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"]
+
+[storage.buckets.lead-imports]
+public = false
+file_size_limit = "20MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173/**"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_signup = false # usuários entram por convite (SaaS B2B)
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[analytics]
+enabled = false
