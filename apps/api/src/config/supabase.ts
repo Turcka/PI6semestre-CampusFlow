@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { AppError } from '../utils/app-error.js';
 import { env } from './env.js';
 
 let adminClient: SupabaseClient | null = null;
@@ -11,7 +12,11 @@ let adminClient: SupabaseClient | null = null;
  */
 export function getAdminClient(): SupabaseClient {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios.');
+    throw new AppError(
+      503,
+      'SUPABASE_NOT_CONFIGURED',
+      'SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios. Configure em apps/api/.env.',
+    );
   }
   if (!adminClient) {
     adminClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {

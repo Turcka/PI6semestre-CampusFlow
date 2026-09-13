@@ -33,6 +33,9 @@ const envSchema = z.object({
   QUEUE_MAX_RETRIES: z.coerce.number().int().positive().default(5),
 
   MAPBOX_ACCESS_TOKEN: z.string().optional(),
+
+  WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
+  API_BASE_URL: z.string().url().default('http://localhost:3333'),
 });
 
 const parsed = envSchema.safeParse(process.env);
