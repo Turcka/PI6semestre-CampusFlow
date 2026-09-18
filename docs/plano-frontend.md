@@ -1,129 +1,131 @@
-# Plano de Ação - Frontend (React + Tailwind CSS, PWA)
+# Plano de Ação - Frontend (React + Tailwind CSS, PWA) - Revisão 2
 
-Tecnologia: **React 18 + TypeScript + Tailwind CSS**, empacotado com **Vite** e transformado em **PWA** com `vite-plugin-pwa` (Workbox), conforme RNF-01 ("frontend/mobile (PWA) em React, interfaces nativas e responsivas na Web para secretarias e no Mobile para visitantes"). Mapa com **Leaflet** (`react-leaflet`) e tiles **Mapbox**. Gráficos com Recharts. Estado de servidor com TanStack Query; formulários com React Hook Form + zod; auth com `@supabase/supabase-js`.
+Tecnologia mantida: **React 18 + TypeScript + Tailwind CSS**, **Vite** + `vite-plugin-pwa`, TanStack Query, React Hook Form + zod, `@supabase/supabase-js` (auth de admin/promotor/professor), Recharts. Leaflet/Mapbox ficam restritos à gestão de POIs (roteiro); o mapa público offline deixa de ser prioridade.
+
+Fonte dos requisitos: **Documento de Requisitos do Sistema - Plataforma Inteligente para Agendamento e Gestão de Visitas Individuais**, seções 3.1–3.14, 4 (módulos), 5 (fluxo) e 6 (status). APIs de referência: [`plano-backend.md`](plano-backend.md) (Revisão 2).
 
 Diretório: [`apps/web/`](../apps/web/). Organização por `features/` (domínio) + `components/` (UI genérica) + `app/` (roteamento/providers).
 
 ---
 
-## Etapa 0 - Bootstrap e fundações
+## Etapa R0 - Estado atual e reajuste
 
-1. `npm install` na raiz. Já criados: `package.json`, `vite.config.ts` (PWA + proxy `/api` + Vitest), `tailwind.config.ts`, `postcss.config.js`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/app/{providers,router}.tsx`, `src/lib/{api,supabase}.ts`, `src/styles/globals.css`.
-2. Criar `eslint.config.js` (react-hooks, react-refresh, typescript-eslint), gerar ícones em `public/icons/` (192, 512, maskable).
-3. Design system mínimo em `components/ui`: `Button` (variantes primary/secondary/ghost/danger, tamanhos, loading), `Input`, `Select`, `Textarea`, `Checkbox`, `Badge` (status de visita/lead com cores), `Card`, `Dialog`, `Drawer/BottomSheet`, `Table` (responsiva: cards no mobile), `Tabs`, `Toast`, `Skeleton`, `EmptyState`, `Pagination`.
-4. Layouts em `app/layouts`: `PublicLayout` (header simples com logo do tenant), `AppLayout` (sidebar colapsável em `md+`, bottom-nav em mobile, topbar com seletor de campus e menu do usuário), `AuthLayout`.
-5. Utilitários: `lib/format.ts` (datas `pt-BR` com `date-fns`, telefone, %), `lib/query-keys.ts`, `lib/download.ts`.
-6. Acessibilidade e responsividade como padrão: foco visível, `aria-*` nos componentes, breakpoints `sm/md/lg`, alvo de toque mínimo 44px.
+Implementado até agora: apenas o **scaffold** - `vite.config.ts` (PWA, proxy `/api`, Vitest), Tailwind, `main.tsx`, `App.tsx`, `app/{providers,router}.tsx` com a rota `/` (`HomePage` placeholder), `lib/{api,supabase}.ts`, e READMEs em `features/*` descrevendo o backlog antigo. Não há telas de negócio, portanto **não há código de UI a desfazer**; o reajuste é de backlog e estrutura de pastas.
 
-Entregável: `npm run dev:web` exibe layout com navegação vazia; `npm run build` gera `dist/` com `manifest.webmanifest` e `sw.js`.
+### Tabela "legado planejado -> destino"
 
----
+| Feature planejada (Revisão 1) | Destino |
+| --- | --- |
+| `features/auth` (login, callback, guards) | **Manter**; papéis `admin`, `promotor`, `professor`. |
+| `features/leads` (tabela, `LeadImportWizard`, exportação Excel) | **Substituir** por `features/candidates` (lista/detalhe do candidato, sem importação em massa nem exportação Excel). |
+| `features/scheduling` (formulário + `SlotCalendar` público) | **Substituir** por `features/chatbot` (jornada guiada) + `features/scheduling` (escolha de janela após o perfil). |
+| `features/calendar` (agenda do coordenador, confirmar/recusar) | **Evoluir** em duas: `features/invitations` (promotor/professor aceitam/recusam) e `features/calendar` (calendário operacional do admin com filtros). |
+| `features/visits` (tabela da secretaria) | **Manter e ampliar**: status novos, match/justificativa, reencaminhamentos, notas, briefing. |
+| `features/dashboard` (KPIs de leads) | **Reescrever** com os indicadores do §3.10. |
+| `features/messaging` (templates, régua, campanhas WhatsApp, logs) | **Reduzir**: templates de e-mail, régua por gatilho/público, logs. Campanhas e WhatsApp saem do backlog. |
+| `features/map` (mapa público offline, `PoiManager`, `RouteEditor`) | **Reorientar**: gestão de POIs com tags de interesse e promotores aptos; `RouteEditor` mantido; mapa público e pré-cache offline saem do núcleo. |
+| `features/checkin` (QR do visitante, scanner do embaixador) | **Remover** do backlog; comparecimento é ação na visita (`features/visits`). |
+| `features/settings` (`BillingSettings`, `TenantSettings`, usuários, cursos) | **Manter** usuários/cursos/tenant; **remover** billing; **adicionar** perguntas do chatbot, pesos do match, regras de professor, políticas de agendamento, categorias de interesse. |
+| `pwa/offline-map.ts` | **Remover** do backlog; PWA mantido para instalação e cache de shell (promotor consulta briefing no celular). |
+| READMEs em `features/*` | **Reescrever** conforme as novas features; pastas de features removidas ganham nota de descontinuação e são apagadas ao criar as substitutas. |
 
-## Etapa 1 - Autenticação e sessão (`features/auth`)
-
-1. `LoginPage`: e-mail + senha via `supabase.auth.signInWithPassword`; link "esqueci minha senha" (`resetPasswordForEmail`); página de definição de senha ao aceitar convite (`/auth/callback`).
-2. `AuthProvider`: escuta `onAuthStateChange`, busca `GET /auth/me` (perfil, papel, tenant) e expõe `useSession()`.
-3. Guards: `RequireAuth` (redireciona para `/login`), `RequireRole(roles)`.
-4. Redirecionamento por papel após login: coordenador -> `/app/agenda`; secretaria/admin -> `/app/dashboard`; embaixador -> `/app/checkin`.
-5. Tratamento de expiração: `ApiError 401` limpa sessão e redireciona.
-
----
-
-## Etapa 2 - Fase 1: Core Engine
-
-### 2.1 Área da secretaria - Leads (`features/leads`, RF-01)
-
-1. `LeadsPage` com `LeadsTable`: colunas nome, contato, curso, origem, status (Badge), criado em; ordenação, busca com debounce, filtros (curso, origem, status, período) sincronizados com a URL (`useSearchParams`).
-2. `LeadImportWizard` (Dialog em 3 passos): upload (drag and drop, `.csv/.xlsx`) -> preview com abas "Válidos / Duplicados / Inválidos" e motivo por linha -> confirmar; progresso e resumo final.
-3. `LeadDetailDrawer`: dados, edição inline, histórico de visitas e mensagens.
-4. Botão "Exportar Excel": `fetch` de `/leads/export.xlsx` com filtros atuais, `blob` -> `download.ts`.
-5. Hooks: `useLeads(filters)`, `useLead(id)`, `useImportLeads()`, `useConfirmImport()`, `useUpdateLead()` com invalidação de cache.
-
-### 2.2 Área pública do candidato - Agendamento (`features/scheduling`, RF-02/RF-03)
-
-Rota `/agendar/:campusSlug`, mobile-first, sem login.
-
-1. `LeadForm`: nome, e-mail, telefone com máscara BR (convertido para E.164 no submit), curso (select carregado de `/public/campuses/:slug`), origem opcional (UTM), checkbox LGPD com link para política. Schema `publicLeadSchema` do pacote shared.
-2. `SlotCalendar`: calendário mensal (dias com vagas destacados) + lista de horários do dia selecionado (`GET /public/scheduling/slots`); mostra coordenador/curso e vagas restantes; slots lotados desabilitados; `refetchInterval` de 30 s.
-3. `ConfirmStep`: resumo (data, hora, campus, endereço com link para o mapa) e botão "Reservar". Em `409 SLOT_UNAVAILABLE`/`COORDINATOR_BUSY`: toast explicativo, refetch e volta ao calendário.
-4. `SuccessStep`: status "aguardando confirmação do coordenador", o que acontece a seguir (WhatsApp/e-mail), botões "Adicionar ao calendário" (.ics) e "Ver mapa do campus".
-5. Persistir progresso do formulário em `sessionStorage` para não perder dados ao atualizar a página.
-
-### 2.3 Área do coordenador - Agenda (`features/calendar`, RF-04)
-
-1. `AgendaPage`: visão semanal (colunas por dia, blocos por evento `Visita Individual - [Nome]`), com badge de status; navegação por semana; mobile mostra lista por dia.
-2. `PendingVisitsList`: cards das visitas `pending_confirmation` com dados do candidato e ações **Confirmar** / **Recusar** (dialog com motivo). Contador no menu lateral.
-3. `AvailabilityEditor`: grade semanal (dia x horário) para definir regras (início, fim, duração, capacidade) e lista de bloqueios pontuais com date-range picker.
-4. Exportar evento `.ics`.
-
-### 2.4 Área da secretaria - Visitas (`features/visits`)
-
-1. `VisitsPage`: tabela com filtros por status, coordenador, campus, período; ações cancelar (motivo), reagendar (reutiliza `SlotCalendar` em Dialog), reenviar comunicação.
-2. `VisitTimeline`: histórico (criada, confirmada, lembretes enviados, check-in).
-
-### 2.5 Dashboard (`features/dashboard`, RF-01)
-
-1. `DashboardPage`: `KpiCards` (leads, agendadas, confirmadas, realizadas, no-show %, conversão %) com variação vs período anterior.
-2. Gráficos Recharts em `components/charts`: linha (leads por dia), barras (por origem, por curso), funil (lead -> agendado -> confirmado -> check-in -> matriculado).
-3. Filtro global de período e campus (contexto `DashboardFilters`), botão exportar Excel.
-
-Entregável da Fase 1: jornada completa candidato -> reserva -> confirmação do coordenador -> visualização na secretaria, responsiva em mobile e desktop.
+Entregável: estrutura de `features/` renomeada, `router.tsx` com o novo mapa de rotas (páginas placeholder) e `npm run build` verde.
 
 ---
 
-## Etapa 3 - Fase 2: Mensageria (`features/messaging`, RF-05)
+## Etapa R1 - Fundações e autenticação (`components/ui`, `app/layouts`, `features/auth`)
 
-1. `TemplatesPage`: lista por canal; `TemplateEditor` com editor de texto (WhatsApp) ou editor HTML simples com blocos (e-mail), inserção de variáveis por menu (`TEMPLATE_VARIABLES`), preview lado a lado renderizado pela API (`/templates/:id/preview`), campo `providerTemplateName` para WhatsApp com aviso sobre aprovação na Meta.
-2. `CommunicationRulesPage`: tabela gatilho x canal com toggle ativo, template selecionado e offset (véspera, 1h antes...).
-3. `CampaignComposer`: seleção de segmento (filtros de leads com contagem em tempo real), template, agendamento, anexos/localização (WhatsApp), confirmação com estimativa de consumo do plano.
-4. `MessageLogsPage`: tabela com status por mensagem (ícones entregue/lido/aberto/clicado/falha), filtros por canal/template/período e cards de taxa de entrega/abertura/clique.
-5. Na `VisitTimeline` e `LeadDetailDrawer`, exibir mensagens enviadas.
-
----
-
-## Etapa 4 - Fase 3: Mapa interativo e check-in
-
-### 4.1 Mapa público (`features/map`), rota `/mapa/:campusSlug`
-
-1. `CampusMap`: `MapContainer` centrado em `campus.latitude/longitude`, `TileLayer` Mapbox (`https://api.mapbox.com/styles/v1/${VITE_MAPBOX_STYLE}/tiles/{z}/{x}/{y}?access_token=${VITE_MAPBOX_ACCESS_TOKEN}`), `maxBounds` do campus, zoom 15-19.
-2. `PoiMarkers`: ícones por categoria (`L.divIcon` com Tailwind), clustering opcional; filtro por categoria em chips no topo; busca por nome.
-3. `PoiSheet` (bottom sheet): fotos em carrossel, descrição, andar/bloco, acessibilidade, botão "Ir até aqui".
-4. `RouteLayer`: `useGeolocation` (watchPosition) desenha marcador do usuário; ao escolher destino, usa rota pré-calculada da API ou reta simples como fallback; instruções resumidas e distância.
-5. `ItineraryBanner`: se o visitante abriu pelo link da visita (`?visit=token`), mostra roteiro do curso de interesse com ordem de POIs.
-6. **Offline**: estratégias já configuradas em `vite.config.ts` (tiles `CacheFirst`, payload do mapa `StaleWhileRevalidate`, fotos `CacheFirst`). `pwa/offline-map.ts` pré-carrega tiles do bounding box do campus (zooms 16-18) ao abrir o mapa com Wi-Fi; `useOnlineStatus` exibe banner "modo offline".
-
-### 4.2 Gestão do mapa (`/app/mapa`)
-
-1. `PoiManager`: mapa editável (clique posiciona novo POI, arrastar move), formulário lateral, upload de fotos (URL assinada do Supabase Storage), ordenação.
-2. `RouteEditor`: seleção sequencial de POIs, pré-visualização da polilinha (rota calculada pela API via Mapbox Directions), marcação "acessível".
-3. `ItineraryEditor`: curso -> rota.
-
-### 4.3 Check-in (`features/checkin`)
-
-1. `VisitorQrCard` (`/visita/:token`): QR Code grande, dados da visita, contagem regressiva, botões mapa e "adicionar à carteira" (fallback: salvar imagem). Cacheado pelo SW para abrir sem rede na portaria.
-2. `QrScanner` (`/app/checkin`, embaixador/portaria): câmera via `BarcodeDetector` (fallback `@zxing/browser`), feedback sonoro/visual, resultado com nome, coordenador, roteiro do curso e botão "iniciar tour"; lista de check-ins do dia.
+1. Design system mínimo em `components/ui` (mantido do plano anterior): `Button`, `Input`, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Badge` (mapa de cores por `visit_status`: agendada, aguardando promotor, aguardando professor, confirmada, em atendimento, realizada, ausente, cancelada, reagendada), `Card`, `Dialog`, `Drawer/BottomSheet`, `Table` (cards no mobile), `Tabs`, `Toast`, `Skeleton`, `EmptyState`, `Pagination`, `Stepper` (jornada do chatbot), `ScoreBar` (índice de compatibilidade em %).
+2. Layouts: `PublicLayout` (candidato, mobile-first), `AppLayout` (sidebar em `md+`, bottom-nav em mobile, contador de pendências no menu), `AuthLayout`.
+3. `features/auth`: `LoginPage` (`signInWithPassword`, esqueci senha, callback de convite), `AuthProvider` com `GET /auth/me`, guards `RequireAuth` / `RequireRole`.
+4. Redirecionamento por papel: `admin` -> `/app/pendencias`; `promotor` -> `/app/convocacoes`; `professor` -> `/app/solicitacoes`.
+5. Utilitários: `lib/format.ts` (datas `pt-BR`, CPF com máscara, telefone, %), `lib/query-keys.ts`, `lib/candidate-token.ts` (persistência do `portalToken` em `localStorage` para a área do candidato).
 
 ---
 
-## Etapa 5 - Fase 4: Analytics e configurações
+## Etapa R2 - Jornada pública do candidato (`features/chatbot`, `features/scheduling`, `features/candidate-portal`) - §3.1, §3.2, §3.5
 
-1. `DashboardPage` avançado: comparação entre campi, métricas de mensageria, tabela de coordenadores (visitas, taxa de confirmação, no-show), exportações.
-2. `features/settings`: `TenantSettings` (logo, cores do tenant aplicadas via CSS variables no Tailwind), `CampusesSettings` (mapa para marcar centro/bounds), `UsersSettings` (convites, papéis, cursos por coordenador), `CoursesSettings`, `BillingSettings` (plano, barras de consumo leads/coordenadores/WhatsApp, histórico mensal).
-3. Onboarding do tenant: checklist na home do admin (cadastrar campus, cursos, coordenadores, disponibilidade, templates, POIs).
+Rota `/visita/:campusSlug` (mobile-first, sem login). Progresso salvo em `sessionStorage` + `sessionId` retornado pela API.
+
+1. **Cadastro** (`RegisterStep`): nome completo, CPF (máscara + validação de dígitos com `cpfSchema` do shared), e-mail, telefone (E.164 no submit), curso de interesse (`GET /public/campuses/:slug`), consentimento LGPD. `POST /public/candidates` -> `sessionId`, `portalToken`.
+2. **Chatbot** (`ChatbotConversation`): interface conversacional (balões, avatar institucional, indicador de digitação) que consome `GET /sessions/:id/next` e envia `POST /answers`. Componentes por tipo: `SingleChoiceBubble`, `MultiChoiceBubble`, `ScaleBubble` (1–5), `FreeTextBubble`, `AvailabilityPicker` (dias da semana + faixas de horário, com opção "datas específicas"). Barra de progresso; botão "voltar" reenvia resposta anterior.
+3. **Revisão** (`ReviewStep`): lista pergunta -> resposta com "editar"; confirma e chama `POST /complete`; exibe `ProfileSummaryCard` (interesses identificados como chips, foco da visita, resumo textual).
+4. **Escolha da janela** (`WindowPicker`): `GET /public/scheduling/windows` - calendário mensal com dias que têm promotor elegível destacados; lista de janelas do dia; `refetchInterval` 30 s. `POST /public/scheduling/visits`. Em `NO_ELIGIBLE_PROMOTER`, sugere outras janelas; em `PARTICIPANT_BUSY`, refetch e volta ao calendário.
+5. **Confirmação** (`ScheduledStep`): status "aguardando confirmação do promotor", o que acontece a seguir (e-mail), botão "adicionar ao calendário" (.ics) e link para o portal do candidato.
+6. **Portal do candidato** (`/minha-visita`, acesso pelo link do e-mail com `portalToken`): situação da visita (timeline de status), promotor (primeiro nome) e horário, ações **reagendar** (reutiliza `WindowPicker`) e **cancelar** (exibe antecedência mínima e bloqueia quando fora da política), atualizar dados cadastrais, histórico de visitas.
+
+Entregável: jornada cadastro -> chatbot -> perfil -> janela -> agendamento funcionando contra a API, responsiva.
 
 ---
 
-## Etapa 6 - Qualidade, PWA e entrega
+## Etapa R3 - Promotor (`features/invitations`, `features/promoter`) - §3.3, §3.6, §3.8
+
+1. `InvitationsPage` (`/app/convocacoes`): cards de convocações pendentes com contagem regressiva do prazo (`expiresAt`), dados do candidato (nome, curso, foco, top interesses, resumo), horário e professor (se houver); ações **Aceitar** / **Recusar** (dialog com motivo). Estado vazio explicativo. Badge com contagem no menu.
+2. `MyVisitsPage` (`/app/minhas-visitas`): lista por dia (próximas / passadas), badge de status, atalho para o briefing. Ações de comparecimento na própria linha: **Iniciar atendimento**, **Concluir**, **Marcar ausência** (`PATCH /visits/:id/status`).
+3. `VisitBriefingPage` (`/app/minhas-visitas/:id`): "Preparação da visita" - perfil do candidato, dúvidas/interesses, professor recomendado, **roteiro sugerido** (`ItineraryList` ordenável com motivo de cada POI e botão reordenar/remover/adicionar), notas antes/durante/depois (`VisitNotes`), horário e local. Layout pensado para celular (promotor usa durante o tour); PWA cacheia o shell.
+4. `PromoterProfilePage` (`/app/meu-perfil`): questionário comportamental (reutiliza `ChatbotConversation` com `audience = promotor`), cursos com familiaridade (1–5), interesses (nível), foco preferido, laboratórios/espaços aptos (multi-select de POIs), máximo de visitas por dia, "aceitar match automático".
+5. `AvailabilityEditor` (`/app/disponibilidade`): grade semanal de regras + bloqueios pontuais; botão destacado **"Indisponibilidade de última hora"** (data/hora + motivo) que mostra o resultado do reencaminhamento (`reassigned` / `noSubstitute`).
+6. `PromoterHistoryPage`: visitas realizadas, comparecimento, remanejamentos, avaliação média.
+
+---
+
+## Etapa R4 - Professor (`features/professor`) - §3.7
+
+1. `RequestsPage` (`/app/solicitacoes`): solicitações de participação pendentes com dados da visita (candidato, curso, foco, promotor, horário) e ações **Aceitar** / **Recusar** com motivo.
+2. `ProfessorVisitsPage` (`/app/minhas-visitas`, mesma feature de visitas com filtro por professor).
+3. `ProfessorProfilePage`: área de atuação, cursos que atende, temas/dúvidas em que pode atender, "aceita visitas", "professor substituto".
+4. `AvailabilityEditor` reutilizado (`ownerId` = professor).
+
+---
+
+## Etapa R5 - Administração operacional (`features/pendencies`, `features/calendar`, `features/visits`, `features/candidates`) - §3.9, §3.12, §3.14
+
+1. `PendingIssuesPage` (`/app/pendencias`, home do admin): central de pendências agrupada por tipo (sem promotor, aguardando professor, convite expirando, professor obrigatório ausente, conflitos, alertas críticos) com ação direta em cada item (match manual, substituir, cancelar, resolver alerta).
+2. `CalendarPage` (`/app/calendario`): vistas **dia / semana / mês**; cada evento mostra horário, candidato, curso, promotor, professor e status (cor do `Badge`); indicadores de conflito e pendência de aprovação; filtros por curso, promotor, professor, status e período; busca por nome ou CPF; botão **Exportar agenda** (CSV). Painel lateral "Agenda de promotores e professores" (`GET /calendar/agenda/:profileId`).
+3. `VisitsPage` (`/app/visitas`): tabela com filtros (status, curso, promotor, professor, campus, período, busca nome/CPF) e coluna de compatibilidade (`ScoreBar`). Ações: alterar status, cancelar/reagendar (com `override` auditado), substituir promotor/professor, **adicionar visita manual** (`NewVisitDialog`: candidato, janela, promotor/professor opcionais).
+4. `VisitDetailPage` (`/app/visitas/:id`): abas **Resumo** (candidato, horário, participantes, status), **Match** (ranking com score, breakdown e justificativa; fila reserva; botão "match manual"), **Histórico** (status com data/usuário, reencaminhamentos com motivo, notas), **Roteiro**, **Comunicações** (e-mails enviados e agendados).
+5. `CandidatesPage` (`/app/candidatos`) + `CandidateDetailDrawer`: dados cadastrais (edição), perfil comportamental, interesses, resumo do chatbot, respostas, histórico de visitas, conversão (Rubeus).
+6. `UsersSettings` ampliado: lista de promotores e professores com atalhos para editar perfil, disponibilidade e bloqueios em nome do usuário (auditado).
+
+---
+
+## Etapa R6 - Dashboard e conversão (`features/dashboard`) - §3.10, §3.11
+
+1. `DashboardPage` (`/app/dashboard`): filtros globais (período, curso, promotor, status, campus). `KpiCards`: agendadas, confirmadas, realizadas, ausentes, canceladas, reagendadas; taxa de comparecimento, de cancelamento e de reagendamento; taxa de ocupação dos horários; quantidade de remanejamentos; taxa de conversão visitante -> aluno.
+2. Gráficos (Recharts em `components/charts`): série diária (agendadas x realizadas x ausentes), barras por curso e por promotor, ocupação por semana, remanejamentos por motivo, conversão por curso/período e por faixa de compatibilidade.
+3. `PromotersTable`: visitas realizadas, comparecimento, remanejamentos sofridos, avaliação.
+4. `ConversionPanel`: status de conversão por candidato (Rubeus), botão "marcar matrícula manualmente" (auditado), indicador de sincronização (última atualização/erros).
+
+---
+
+## Etapa R7 - Configurações do processo (`features/settings`) - §3.14
+
+Rotas em `/app/configuracoes/*` (somente `admin`):
+
+| Página | Conteúdo |
+| --- | --- |
+| `ChatbotQuestionsSettings` | Lista ordenável (drag and drop) de perguntas por público (candidato/promotor) e por curso; editor de pergunta (tipo, opções, mapeamento opção -> interesses/traits/foco, obrigatória); pré-visualização em `ChatbotConversation`. |
+| `InterestCategoriesSettings` | CRUD de categorias de interesse (tecnologia, carros, ...). |
+| `MatchWeightsSettings` | Tabela de critérios com peso (slider), tipo (obrigatório/complementar/desempate) e mínimo; **simulador**: escolhe candidato + janela e vê o ranking com justificativa (`POST /match/preview`). |
+| `ProfessorRulesSettings` | Regras "quando o professor é obrigatório/recomendado" por curso, foco e interesse. |
+| `SchedulingPoliciesSettings` | Antecedência mínima para cancelar/reagendar por foco, prazo do convite, máximo de remanejamentos, duração padrão. |
+| `NotificationsSettings` | Templates de e-mail (editor com variáveis, preview pela API) e régua gatilho x público com toggle. |
+| `CampusSettings` | Campus, cursos, POIs (mapa Leaflet para posicionar) com tags de interesse, rotas e roteiro base por curso. |
+| `UsersSettings` | Convites (`admin`, `promotor`, `professor`), ativação, perfis. |
+| `AuditLogPage` | Histórico de ações administrativas e decisões automáticas (quem, quando, o que mudou). |
+
+---
+
+## Etapa R8 - Qualidade, PWA e entrega
 
 | Área | Ações |
 | --- | --- |
-| Testes | Vitest + Testing Library: componentes de UI, `SlotCalendar` (estados vazio/lotado/erro 409), `LeadForm` (validação e E.164), hooks com `QueryClient` de teste e `msw` para a API. |
-| PWA | Lighthouse > 90 em PWA/Performance/Acessibilidade; testar instalação em Android/iOS; `useRegisterSW` com toast de atualização; página offline de fallback. |
-| Performance | `React.lazy` por rota, code-splitting de Leaflet/Recharts, imagens `webp` do Storage com `srcset`, `staleTime` adequado no TanStack Query. |
-| Acessibilidade | Navegação por teclado no calendário, labels e mensagens de erro associadas, contraste AA. |
-| i18n | Textos em `pt-BR` centralizados (preparado para `i18next` se necessário). |
-| CI/CD | GitHub Actions: `lint` -> `typecheck` -> `test` -> `build`; deploy em Vercel/Netlify com preview por PR; variáveis `VITE_*` via secrets. |
-| Segurança | Nunca expor service role; token Mapbox público restrito por domínio; sanitização de HTML de templates no preview (`DOMPurify`). |
+| Testes | Vitest + Testing Library: `ChatbotConversation` (tipos de pergunta, voltar, revisão), `WindowPicker` (vazio, sem elegível, 409), `RegisterStep` (CPF/E.164), `InvitationsPage` (aceitar/recusar, expiração), hooks com `QueryClient` de teste e `msw`. |
+| PWA | Instalação em Android/iOS; cache do shell e das rotas do promotor (`/app/convocacoes`, `/app/minhas-visitas/*`); `useRegisterSW` com toast de atualização. Sem pré-cache de tiles. |
+| Performance | `React.lazy` por rota; Recharts e Leaflet em chunks separados; `staleTime` por recurso (pendências 15 s, dashboard 60 s). |
+| Acessibilidade | Chatbot navegável por teclado e leitor de tela (`aria-live` nas mensagens), contraste AA, alvo de toque 44 px. |
+| Segurança | `portalToken` só em `localStorage` da área pública e enviado em header; sanitização de HTML nos previews de e-mail (`DOMPurify`); nenhuma chave privada no cliente. |
+| CI/CD | GitHub Actions `lint` -> `typecheck` -> `test` -> `build`; deploy em Vercel/Netlify com preview por PR. |
 
 ---
 
@@ -133,26 +135,29 @@ Entregável da Fase 1: jornada completa candidato -> reserva -> confirmação do
 | --- | --- | --- | --- |
 | `/` | Public | todos | landing / redirect |
 | `/login`, `/auth/callback` | Auth | todos | auth |
-| `/agendar/:campusSlug` | Public | candidato | scheduling |
-| `/mapa/:campusSlug` | Public | visitante | map |
-| `/visita/:token` | Public | visitante | checkin (QR) |
-| `/app/dashboard` | App | admin, secretaria, marketing | dashboard |
-| `/app/leads` | App | admin, secretaria, marketing | leads |
-| `/app/agenda` | App | coordenador, admin | calendar |
-| `/app/visitas` | App | secretaria, admin | visits |
-| `/app/mensagens/*` | App | admin, secretaria, marketing | messaging |
-| `/app/mapa` | App | admin, secretaria, embaixador | map (gestão) |
-| `/app/checkin` | App | embaixador, secretaria | checkin (scanner) |
+| `/visita/:campusSlug` | Public | candidato | chatbot + scheduling |
+| `/minha-visita` | Public (token) | candidato | candidate-portal |
+| `/app/pendencias` | App | admin | pendencies |
+| `/app/dashboard` | App | admin | dashboard |
+| `/app/calendario` | App | admin | calendar |
+| `/app/visitas`, `/app/visitas/:id` | App | admin | visits |
+| `/app/candidatos` | App | admin | candidates |
+| `/app/convocacoes` | App | promotor | invitations |
+| `/app/solicitacoes` | App | professor | professor |
+| `/app/minhas-visitas`, `/app/minhas-visitas/:id` | App | promotor, professor | visits (visão do participante) + briefing |
+| `/app/meu-perfil` | App | promotor, professor | promoter / professor |
+| `/app/disponibilidade` | App | promotor, professor | availability |
 | `/app/configuracoes/*` | App | admin | settings |
 
-## Cronograma sugerido
+## Cronograma revisado
 
 | Semana | Entrega |
 | --- | --- |
-| 1 | Etapas 0-1: design system, layouts, auth, guards. |
-| 2 | Leads (tabela, importação, exportação). |
-| 3-4 | Agendamento público, agenda do coordenador, visitas, dashboard básico. |
-| 5-6 | Mensageria: templates, régua, campanhas, logs. |
-| 7 | Mapa público com offline, gestão de POIs/rotas, QR/scanner. |
-| 8 | Analytics avançado, configurações e billing. |
-| 9 | Testes, Lighthouse, acessibilidade, CI/CD e documentação. |
+| 1 | R0–R1: reestruturação de `features/`, design system, layouts, auth e redirecionamento por papel. |
+| 2–3 | R2: jornada pública (cadastro, chatbot, revisão, janela, confirmação) e portal do candidato. |
+| 4 | R3: convocações, minhas visitas, briefing/roteiro, perfil e disponibilidade do promotor. |
+| 5 | R4–R5 (parte 1): professor; central de pendências; calendário operacional. |
+| 6 | R5 (parte 2): visitas (detalhe com match, histórico, roteiro, comunicações), candidatos. |
+| 7 | R6: dashboard e conversão. |
+| 8 | R7: configurações (chatbot, pesos, regras, políticas, notificações, campus/POIs, auditoria). |
+| 9 | R8: testes, PWA, acessibilidade, CI/CD, documentação. |
