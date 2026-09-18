@@ -9,6 +9,10 @@
   html {
     -webkit-tap-highlight-color: transparent;
   }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
 }
 
 @layer components {

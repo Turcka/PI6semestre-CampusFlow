@@ -14,21 +14,29 @@ export class ApiError extends Error {
   }
 }
 
+type ApiOptions = RequestInit & {
+  candidateToken?: string | null;
+};
+
 /**
- * Cliente HTTP mínimo para a API do CampusFlow.
- * Anexa automaticamente o JWT da sessão Supabase, se houver.
+ * Cliente HTTP para a API do CampusFlow.
+ * Anexa JWT Supabase (área autenticada) e/ou portalToken do candidato.
  */
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, init: ApiOptions = {}): Promise<T> {
+  const { candidateToken, ...fetchInit } = init;
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(candidateToken ? { 'X-Candidate-Token': candidateToken } : {}),
+    ...(fetchInit.headers as Record<string, string> | undefined),
+  };
+
   const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
+    ...fetchInit,
+    headers,
   });
 
   if (!response.ok) {
@@ -44,5 +52,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
+}
+
+export function publicApi<T>(path: string, init: ApiOptions = {}) {
+  return api<T>(`/api/v1/public${path}`, init);
+}
+
+export function v1Api<T>(path: string, init: ApiOptions = {}) {
+  return api<T>(`/api/v1${path}`, init);
 }
