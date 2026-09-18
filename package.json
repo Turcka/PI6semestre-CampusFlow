@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "dev:api": "npm run dev --workspace apps/api",
+    "dev:worker": "npm run dev:worker --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

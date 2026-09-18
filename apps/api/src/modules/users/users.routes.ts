@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -7,16 +7,5 @@ import { listUsersQuerySchema, updateUserSchema, userIdParamsSchema } from './us
 
 export const usersRouter = Router();
 
-usersRouter.get(
-  '/',
-  requireRole('admin', 'secretaria'),
-  validate({ query: listUsersQuerySchema }),
-  usersController.list,
-);
-
-usersRouter.patch(
-  '/:id',
-  requireRole('admin', 'secretaria'),
-  validate({ params: userIdParamsSchema, body: updateUserSchema }),
-  usersController.patch,
-);
+usersRouter.get('/', requireRole('admin'), validate({ query: listUsersQuerySchema }), usersController.list);
+usersRouter.patch('/:id', requireRole('admin'), validate({ params: userIdParamsSchema, body: updateUserSchema }), usersController.patch);

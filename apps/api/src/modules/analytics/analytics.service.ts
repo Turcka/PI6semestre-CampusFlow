@@ -2,131 +2,136 @@ import type { Request } from 'express';
 import type { z } from 'zod';
 
 import { AppError } from '../../utils/app-error.js';
-import type { analyticsRangeQuerySchema } from './analytics.schemas.js';
+import type { analyticsFilterSchema, timeseriesQuerySchema } from './analytics.schemas.js';
 
-type RangeQuery = z.infer<typeof analyticsRangeQuerySchema>;
+type Filters = z.infer<typeof analyticsFilterSchema>;
+type Timeseries = z.infer<typeof timeseriesQuerySchema>;
 
-type CacheEntry = { expiresAt: number; value: unknown };
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60_000;
+const cache = new Map<string, { expiresAt: number; value: unknown }>();
+const TTL_MS = 60_000;
 
 function requireUser(req: Request) {
   if (!req.user || !req.supabase) throw AppError.unauthorized();
   return { user: req.user, supabase: req.supabase };
 }
 
-function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
+async function cached<T>(key: string, loader: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value as T);
-  return loader().then((value) => {
-    cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
-    return value;
-  });
+  if (hit && hit.expiresAt > Date.now()) return hit.value as T;
+  const value = await loader();
+  cache.set(key, { expiresAt: Date.now() + TTL_MS, value });
+  return value;
 }
 
-export async function getOverview(req: Request, query: RangeQuery) {
-  const { user, supabase } = requireUser(req);
-  const key = `overview:${user.tenantId}:${query.from ?? ''}:${query.to ?? ''}:${query.campusId ?? ''}`;
-
-  return cached(key, async () => {
-    let leadsQ = supabase
-      .from('leads')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', user.tenantId)
-      .is('anonymized_at', null);
-    let visitsQ = supabase
-      .from('visits')
-      .select('id, status', { count: 'exact' })
-      .eq('tenant_id', user.tenantId);
-
-    if (query.campusId) {
-      leadsQ = leadsQ.eq('campus_id', query.campusId);
-      visitsQ = visitsQ.eq('campus_id', query.campusId);
-    }
-    if (query.from) leadsQ = leadsQ.gte('created_at', `${query.from}T00:00:00Z`);
-    if (query.to) leadsQ = leadsQ.lte('created_at', `${query.to}T23:59:59Z`);
-
-    const [leads, visits] = await Promise.all([leadsQ, visitsQ]);
-    if (leads.error) throw AppError.badRequest(leads.error.message);
-    if (visits.error) throw AppError.badRequest(visits.error.message);
-
-    const visitRows = visits.data ?? [];
-    return {
-      leads: leads.count ?? 0,
-      visits: visits.count ?? 0,
-      confirmed: visitRows.filter((v) => v.status === 'confirmed').length,
-      checkedIn: visitRows.filter((v) => v.status === 'checked_in').length,
-      cancelled: visitRows.filter((v) => v.status === 'cancelled').length,
-    };
-  });
+function applyCommonFilters<T extends { eq: Function; gte: Function; lte: Function }>(
+  q: T,
+  query: Filters,
+  dateColumn = 'day',
+): T {
+  if (query.campusId) q = q.eq('campus_id', query.campusId);
+  if (query.courseId) q = q.eq('course_id', query.courseId);
+  if (query.promoterId) q = q.eq('promoter_id', query.promoterId);
+  if (query.status) q = q.eq('status', query.status);
+  if (query.from) q = q.gte(dateColumn, query.from);
+  if (query.to) q = q.lte(dateColumn, query.to);
+  return q;
 }
 
-export async function getFunnel(req: Request, query: RangeQuery) {
+export async function overview(req: Request, query: Filters) {
   const { user, supabase } = requireUser(req);
-  const key = `funnel:${user.tenantId}:${query.from ?? ''}:${query.to ?? ''}:${query.campusId ?? ''}`;
-
+  const key = `overview:${user.tenantId}:${JSON.stringify(query)}`;
   return cached(key, async () => {
-    let q = supabase.from('vw_funnel').select('*').eq('tenant_id', user.tenantId);
-    if (query.campusId) q = q.eq('campus_id', query.campusId);
-    if (query.from) q = q.gte('period', query.from);
-    if (query.to) q = q.lte('period', query.to);
+    let q = supabase.from('vw_visits_kpis').select('*').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query);
     const { data, error } = await q;
     if (error) throw AppError.badRequest(error.message);
     return data ?? [];
   });
 }
 
-export async function getLeadsBySource(req: Request, query: RangeQuery) {
+export async function visitsByCourse(req: Request, query: Filters) {
   const { user, supabase } = requireUser(req);
-  const key = `leads-by-source:${user.tenantId}:${query.from ?? ''}:${query.to ?? ''}:${query.campusId ?? ''}`;
-
+  const key = `by-course:${user.tenantId}:${JSON.stringify(query)}`;
   return cached(key, async () => {
-    let q = supabase.from('mv_leads_daily').select('source, leads').eq('tenant_id', user.tenantId);
-    if (query.campusId) q = q.eq('campus_id', query.campusId);
-    if (query.from) q = q.gte('day', query.from);
-    if (query.to) q = q.lte('day', query.to);
-    const { data, error } = await q;
-    if (error) throw AppError.badRequest(error.message);
-
-    const agg = new Map<string, number>();
-    for (const row of data ?? []) {
-      agg.set(row.source, (agg.get(row.source) ?? 0) + Number(row.leads));
-    }
-    return [...agg.entries()].map(([source, leads]) => ({ source, leads }));
-  });
-}
-
-export async function getLeadsByCourse(req: Request, query: RangeQuery) {
-  const { user, supabase } = requireUser(req);
-  const key = `leads-by-course:${user.tenantId}:${query.from ?? ''}:${query.to ?? ''}:${query.campusId ?? ''}`;
-
-  return cached(key, async () => {
-    let q = supabase.from('mv_leads_daily').select('course_id, leads').eq('tenant_id', user.tenantId);
-    if (query.campusId) q = q.eq('campus_id', query.campusId);
-    if (query.from) q = q.gte('day', query.from);
-    if (query.to) q = q.lte('day', query.to);
-    const { data, error } = await q;
-    if (error) throw AppError.badRequest(error.message);
-
-    const agg = new Map<string, number>();
-    for (const row of data ?? []) {
-      const id = row.course_id ?? 'null';
-      agg.set(id, (agg.get(id) ?? 0) + Number(row.leads));
-    }
-    return [...agg.entries()].map(([courseId, leads]) => ({ courseId: courseId === 'null' ? null : courseId, leads }));
-  });
-}
-
-export async function getMessagingMetrics(req: Request, query: RangeQuery) {
-  const { user, supabase } = requireUser(req);
-  const key = `messaging:${user.tenantId}:${query.from ?? ''}:${query.to ?? ''}`;
-
-  return cached(key, async () => {
-    let q = supabase.from('vw_messaging_metrics').select('*').eq('tenant_id', user.tenantId);
-    if (query.from) q = q.gte('day', query.from);
-    if (query.to) q = q.lte('day', query.to);
+    let q = supabase.from('vw_visits_kpis').select('course_id, total, confirmed, completed, absent, cancelled').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query);
     const { data, error } = await q;
     if (error) throw AppError.badRequest(error.message);
     return data ?? [];
+  });
+}
+
+export async function visitsByPromoter(req: Request, query: Filters) {
+  const { user, supabase } = requireUser(req);
+  const key = `by-promoter:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('vw_visits_kpis').select('promoter_id, total, confirmed, completed, absent').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query);
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return data ?? [];
+  });
+}
+
+export async function occupancy(req: Request, query: Filters) {
+  const { user, supabase } = requireUser(req);
+  const key = `occupancy:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('vw_slot_occupancy').select('*').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query);
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return data ?? [];
+  });
+}
+
+export async function reassignments(req: Request, query: Filters) {
+  const { user, supabase } = requireUser(req);
+  const key = `reassignments:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('vw_reassignment_metrics').select('*').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query, 'day');
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return data ?? [];
+  });
+}
+
+export async function promoters(req: Request, query: Filters) {
+  const { user, supabase } = requireUser(req);
+  const key = `promoters:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('vw_promoter_performance').select('*').eq('tenant_id', user.tenantId);
+    if (query.promoterId) q = q.eq('promoter_id', query.promoterId);
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return data ?? [];
+  });
+}
+
+export async function conversion(req: Request, query: Filters) {
+  const { user, supabase } = requireUser(req);
+  const key = `conversion:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('vw_conversion').select('*').eq('tenant_id', user.tenantId);
+    q = applyCommonFilters(q, query);
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return data ?? [];
+  });
+}
+
+export async function timeseries(req: Request, query: Timeseries) {
+  const { user, supabase } = requireUser(req);
+  const key = `timeseries:${user.tenantId}:${JSON.stringify(query)}`;
+  return cached(key, async () => {
+    let q = supabase.from('mv_visits_daily').select('*').eq('tenant_id', user.tenantId).order('day');
+    if (query.from) q = q.gte('day', query.from);
+    if (query.to) q = q.lte('day', query.to);
+    if (query.campusId) q = q.eq('campus_id', query.campusId);
+    if (query.courseId) q = q.eq('course_id', query.courseId);
+    const { data, error } = await q;
+    if (error) throw AppError.badRequest(error.message);
+    return { metric: query.metric, points: data ?? [] };
   });
 }

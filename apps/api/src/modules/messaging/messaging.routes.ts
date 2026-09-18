@@ -1,10 +1,9 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
 import * as messagingController from './messaging.controller.js';
 import {
-  createCampaignSchema,
   createTemplateSchema,
   listLogsQuerySchema,
   previewTemplateSchema,
@@ -15,7 +14,7 @@ import {
 
 export const messagingRouter = Router();
 
-const editors = requireRole('admin', 'secretaria', 'marketing');
+const editors = requireRole('admin');
 
 messagingRouter.get('/templates', messagingController.listTemplates);
 messagingRouter.post('/templates', editors, validate({ body: createTemplateSchema }), messagingController.createTemplate);
@@ -39,7 +38,5 @@ messagingRouter.post(
 
 messagingRouter.get('/rules', messagingController.listRules);
 messagingRouter.put('/rules', editors, validate({ body: putRulesSchema }), messagingController.putRules);
-
-messagingRouter.post('/campaigns', editors, validate({ body: createCampaignSchema }), messagingController.createCampaign);
 
 messagingRouter.get('/logs', validate({ query: listLogsQuerySchema }), messagingController.listLogs);

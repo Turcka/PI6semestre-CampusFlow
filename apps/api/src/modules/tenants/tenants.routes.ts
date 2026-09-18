@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -23,13 +23,13 @@ tenantsRouter.patch(
 tenantsRouter.get('/current/campuses', tenantsController.listCampuses);
 tenantsRouter.post(
   '/current/campuses',
-  requireRole('admin', 'secretaria'),
+  requireRole('admin'),
   validate({ body: createCampusSchema }),
   tenantsController.createCampus,
 );
 tenantsRouter.patch(
   '/current/campuses/:id',
-  requireRole('admin', 'secretaria'),
+  requireRole('admin'),
   validate({ params: campusIdParamsSchema, body: updateCampusSchema }),
   tenantsController.patchCampus,
 );

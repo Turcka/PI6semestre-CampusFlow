@@ -1,4 +1,4 @@
-import type { Request } from 'express';
+﻿import type { Request } from 'express';
 import type { z } from 'zod';
 
 import { AppError } from '../../utils/app-error.js';
@@ -19,25 +19,26 @@ function requireUser(req: Request) {
   return { user: req.user, supabase: req.supabase };
 }
 
-function resolveCoordinatorId(req: Request, requested?: string) {
+function isSelfManagedRole(role: string) {
+  return role === 'promotor' || role === 'professor';
+}
+
+function resolveOwnerId(req: Request, requested?: string) {
   const { user } = requireUser(req);
-  if (user.role === 'coordenador') {
-    if (requested && requested !== user.id) {
-      throw AppError.forbidden('Coordenador só pode gerenciar a própria agenda.');
-    }
+  if (isSelfManagedRole(user.role)) {
+    if (requested && requested !== user.id) throw AppError.forbidden('Você só pode gerenciar a própria disponibilidade.');
     return user.id;
   }
-  if (!requested) throw AppError.badRequest('coordinatorId é obrigatório.');
+  if (!requested) throw AppError.badRequest('ownerId é obrigatório.');
   return requested;
 }
 
 export async function listRules(req: Request, query: ListRulesQuery) {
   const { user, supabase } = requireUser(req);
-  const coordinatorId =
-    user.role === 'coordenador' ? user.id : query.coordinatorId ?? null;
+  const ownerId = isSelfManagedRole(user.role) ? user.id : query.ownerId ?? null;
 
   let q = supabase.from('availability_rules').select('*').eq('tenant_id', user.tenantId).order('weekday');
-  if (coordinatorId) q = q.eq('coordinator_id', coordinatorId);
+  if (ownerId) q = q.eq('owner_id', ownerId);
 
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
@@ -46,13 +47,13 @@ export async function listRules(req: Request, query: ListRulesQuery) {
 
 export async function replaceRules(req: Request, input: PutRules) {
   const { user, supabase } = requireUser(req);
-  const coordinatorId = resolveCoordinatorId(req, input.coordinatorId);
+  const ownerId = resolveOwnerId(req, input.ownerId);
 
   const { error: delError } = await supabase
     .from('availability_rules')
     .delete()
     .eq('tenant_id', user.tenantId)
-    .eq('coordinator_id', coordinatorId)
+    .eq('owner_id', ownerId)
     .eq('campus_id', input.campusId);
   if (delError) throw AppError.badRequest(delError.message);
 
@@ -60,7 +61,7 @@ export async function replaceRules(req: Request, input: PutRules) {
 
   const rows = input.rules.map((rule) => ({
     tenant_id: user.tenantId,
-    coordinator_id: coordinatorId,
+    owner_id: ownerId,
     campus_id: input.campusId,
     weekday: rule.weekday,
     start_time: `${rule.startTime}:00`,
@@ -79,12 +80,12 @@ export async function replaceRules(req: Request, input: PutRules) {
 
 export async function listExceptions(req: Request, query: ListExceptionsQuery) {
   const { user, supabase } = requireUser(req);
-  const coordinatorId = user.role === 'coordenador' ? user.id : query.coordinatorId;
+  const ownerId = isSelfManagedRole(user.role) ? user.id : query.ownerId;
 
-  let q = supabase.from('availability_exceptions').select('*').eq('tenant_id', user.tenantId).order('created_at', {
-    ascending: false,
-  });
-  if (coordinatorId) q = q.eq('coordinator_id', coordinatorId);
+  let q = supabase.from('availability_exceptions').select('*').eq('tenant_id', user.tenantId).order('created_at', { ascending: false });
+  if (ownerId) q = q.eq('owner_id', ownerId);
+  if (query.from) q = q.gte('created_at', query.from);
+  if (query.to) q = q.lte('created_at', query.to);
 
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
@@ -93,21 +94,13 @@ export async function listExceptions(req: Request, query: ListExceptionsQuery) {
 
 export async function createException(req: Request, input: CreateException) {
   const { user, supabase } = requireUser(req);
-  const coordinatorId = resolveCoordinatorId(req, input.coordinatorId);
+  const ownerId = resolveOwnerId(req, input.ownerId);
 
-  if (new Date(input.endsAt) <= new Date(input.startsAt)) {
-    throw AppError.badRequest('endsAt deve ser posterior a startsAt.');
-  }
+  if (new Date(input.endsAt) <= new Date(input.startsAt)) throw AppError.badRequest('endsAt deve ser posterior a startsAt.');
 
   const { data, error } = await supabase
     .from('availability_exceptions')
-    .insert({
-      tenant_id: user.tenantId,
-      coordinator_id: coordinatorId,
-      period: `[${input.startsAt},${input.endsAt})`,
-      kind: input.kind,
-      reason: input.reason ?? null,
-    })
+    .insert({ tenant_id: user.tenantId, owner_id: ownerId, period: `[${input.startsAt},${input.endsAt})`, kind: input.kind, reason: input.reason ?? null })
     .select()
     .single();
   if (error) throw AppError.badRequest(error.message);
@@ -117,7 +110,7 @@ export async function createException(req: Request, input: CreateException) {
 export async function deleteException(req: Request, exceptionId: string) {
   const { user, supabase } = requireUser(req);
   let q = supabase.from('availability_exceptions').delete().eq('id', exceptionId).eq('tenant_id', user.tenantId);
-  if (user.role === 'coordenador') q = q.eq('coordinator_id', user.id);
+  if (isSelfManagedRole(user.role)) q = q.eq('owner_id', user.id);
   const { error } = await q;
   if (error) throw AppError.badRequest(error.message);
 }

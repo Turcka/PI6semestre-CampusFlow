@@ -1,14 +1,13 @@
-import type { UserRole } from '@campusflow/shared';
 import type { NextFunction, Request, Response } from 'express';
 
 import { getAdminClient } from '../config/supabase.js';
 import { AppError } from '../utils/app-error.js';
 
 /**
- * Verifica limites do plano SaaS do tenant antes de ações que consomem cotas
- * (novo coordenador, confirmação de importação de leads).
+ * @deprecated Billing/plan limits saíram do núcleo (módulo em `_legacy/billing`).
+ * Mantido apenas para imports legados; não montar em rotas novas.
  */
-export function enforcePlanLimits(kind: 'coordinator' | 'leads', amount = 1) {
+export function enforcePlanLimits(kind: 'promoter' | 'candidates' | 'coordinator' | 'leads', amount = 1) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.user) throw AppError.unauthorized();
@@ -28,29 +27,29 @@ export function enforcePlanLimits(kind: 'coordinator' | 'leads', amount = 1) {
         return;
       }
 
-      if (kind === 'coordinator' && plan.max_coordinators != null) {
+      if ((kind === 'promoter' || kind === 'coordinator') && plan.max_coordinators != null) {
         const { count } = await admin
           .from('profiles')
           .select('id', { count: 'exact', head: true })
           .eq('tenant_id', tenantId)
-          .eq('role', 'coordenador' satisfies UserRole)
+          .eq('role', 'promotor')
           .eq('is_active', true);
         if ((count ?? 0) + amount > plan.max_coordinators) {
-          throw AppError.forbidden(`Limite de coordenadores do plano atingido (${plan.max_coordinators}).`);
+          throw AppError.forbidden(`Limite de promotores do plano atingido (${plan.max_coordinators}).`);
         }
       }
 
-      if (kind === 'leads' && plan.max_leads_month != null) {
+      if ((kind === 'candidates' || kind === 'leads') && plan.max_leads_month != null) {
         const start = new Date();
         start.setUTCDate(1);
         start.setUTCHours(0, 0, 0, 0);
         const { count } = await admin
-          .from('leads')
+          .from('candidates')
           .select('id', { count: 'exact', head: true })
           .eq('tenant_id', tenantId)
           .gte('created_at', start.toISOString());
         if ((count ?? 0) + amount > plan.max_leads_month) {
-          throw AppError.forbidden(`Limite mensal de leads do plano atingido (${plan.max_leads_month}).`);
+          throw AppError.forbidden(`Limite mensal de candidatos do plano atingido (${plan.max_leads_month}).`);
         }
       }
 

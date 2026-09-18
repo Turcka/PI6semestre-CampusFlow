@@ -1,4 +1,4 @@
-/** Título padronizado do evento de agenda (RF-04). */
+/** Título padronizado do evento de agenda. */
 export const VISIT_EVENT_TITLE_PREFIX = 'Visita Individual - ';
 export const GROUP_VISIT_EVENT_TITLE_PREFIX = 'Visita em Grupo - ';
 
@@ -7,19 +7,22 @@ export function buildVisitEventTitle(candidateName: string, type: 'individual' |
   return `${prefix}${candidateName.trim()}`;
 }
 
-/** Variáveis disponíveis nos templates de mensagem. */
+/** Variáveis disponíveis nos templates de mensagem (Revisão 2). */
 export const TEMPLATE_VARIABLES = [
   'candidato.nome',
   'candidato.primeiro_nome',
   'candidato.curso',
+  'candidato.resumo',
   'visita.data',
   'visita.hora',
   'visita.tipo',
-  'coordenador.nome',
+  'visita.link_aceite',
+  'visita.roteiro',
+  'promotor.nome',
+  'professor.nome',
   'campus.nome',
   'campus.endereco',
   'campus.link_mapa',
-  'checkin.link_qr',
   'instituicao.nome',
 ] as const;
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
@@ -27,6 +30,7 @@ export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
 /** Nomes das filas pgmq no Supabase. */
 export const QUEUES = {
   MESSAGES_OUTBOUND: 'messages_outbound',
+  RUBEUS_OUTBOUND: 'rubeus_outbound',
 } as const;
 
 export const DEFAULT_VISIT_DURATION_MINUTES = 60;

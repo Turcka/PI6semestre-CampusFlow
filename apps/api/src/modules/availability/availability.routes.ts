@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -12,38 +12,10 @@ import {
 } from './availability.schemas.js';
 
 export const availabilityRouter = Router();
+const managers = requireRole('admin', 'promotor', 'professor');
 
-availabilityRouter.get(
-  '/rules',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ query: listRulesQuerySchema }),
-  availabilityController.listRules,
-);
-
-availabilityRouter.put(
-  '/rules',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ body: putRulesSchema }),
-  availabilityController.putRules,
-);
-
-availabilityRouter.get(
-  '/exceptions',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ query: listExceptionsQuerySchema }),
-  availabilityController.listExceptions,
-);
-
-availabilityRouter.post(
-  '/exceptions',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ body: createExceptionSchema }),
-  availabilityController.createException,
-);
-
-availabilityRouter.delete(
-  '/exceptions/:id',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ params: exceptionIdParamsSchema }),
-  availabilityController.deleteException,
-);
+availabilityRouter.get('/rules', managers, validate({ query: listRulesQuerySchema }), availabilityController.listRules);
+availabilityRouter.put('/rules', managers, validate({ body: putRulesSchema }), availabilityController.putRules);
+availabilityRouter.get('/exceptions', managers, validate({ query: listExceptionsQuerySchema }), availabilityController.listExceptions);
+availabilityRouter.post('/exceptions', managers, validate({ body: createExceptionSchema }), availabilityController.createException);
+availabilityRouter.delete('/exceptions/:id', managers, validate({ params: exceptionIdParamsSchema }), availabilityController.deleteException);

@@ -1,14 +1,17 @@
 import type {
-  LeadStatus,
+  CandidateStatus,
+  InvitationStatus,
   MessageChannel,
   MessageStatus,
+  ParticipantRole,
   PoiCategory,
   UserRole,
+  VisitFocus,
   VisitStatus,
   VisitType,
 } from './enums.js';
 
-/** Entidades de domínio expostas pela API (DTOs). */
+/** Entidades de domínio expostas pela API (DTOs) — Revisão 2. */
 
 export interface Tenant {
   id: string;
@@ -44,22 +47,31 @@ export interface Course {
   name: string;
 }
 
-export interface Lead {
+export interface Candidate {
   id: string;
   tenantId: string;
   fullName: string;
-  email: string;
-  phone: string;
+  email: string | null;
+  phone: string | null;
+  cpf: string | null;
   courseId: string | null;
   source: string | null;
-  status: LeadStatus;
+  status: CandidateStatus;
+  preferredFocus: VisitFocus | null;
+  profileSummary: string | null;
+  profileCompletedAt: string | null;
+  portalToken: string;
+  trackingCode: string;
   consentAt: string | null;
   createdAt: string;
 }
 
+/** @deprecated Use Candidate */
+export type Lead = Candidate;
+
 export interface VisitSlot {
   id: string;
-  coordinatorId: string;
+  ownerId: string;
   campusId: string;
   startsAt: string;
   endsAt: string;
@@ -70,21 +82,33 @@ export interface VisitSlot {
 export interface Visit {
   id: string;
   tenantId: string;
-  leadId: string;
+  candidateId: string;
   slotId: string;
-  coordinatorId: string;
+  promoterId: string | null;
+  professorId: string | null;
   type: VisitType;
   status: VisitStatus;
+  focus: VisitFocus | null;
   startsAt: string;
   endsAt: string;
-  checkinToken: string | null;
   createdAt: string;
+}
+
+export interface VisitInvitation {
+  id: string;
+  visitId: string;
+  profileId: string;
+  role: ParticipantRole;
+  status: InvitationStatus;
+  expiresAt: string;
+  sentAt: string;
 }
 
 export interface CalendarEvent {
   id: string;
   visitId: string;
-  coordinatorId: string;
+  promoterId: string | null;
+  professorId: string | null;
   title: string;
   startsAt: string;
   endsAt: string;
@@ -104,7 +128,7 @@ export interface MessageTemplate {
 export interface MessageLog {
   id: string;
   tenantId: string;
-  leadId: string | null;
+  candidateId: string | null;
   visitId: string | null;
   channel: MessageChannel;
   status: MessageStatus;
@@ -121,6 +145,20 @@ export interface Poi {
   latitude: number;
   longitude: number;
   photoUrls: string[];
+}
+
+export interface ChatbotQuestion {
+  id: string;
+  tenantId: string;
+  courseId: string | null;
+  audience: 'candidato' | 'promotor';
+  key: string;
+  prompt: string;
+  kind: 'single_choice' | 'multi_choice' | 'scale' | 'free_text';
+  options: unknown[];
+  orderIndex: number;
+  isRequired: boolean;
+  isActive: boolean;
 }
 
 export interface Paginated<T> {

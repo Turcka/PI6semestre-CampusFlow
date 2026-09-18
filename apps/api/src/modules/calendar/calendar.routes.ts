@@ -3,34 +3,22 @@ import { Router } from 'express';
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
 import * as calendarController from './calendar.controller.js';
-import { declineEventSchema, eventIdParamsSchema, listEventsQuerySchema } from './calendar.schemas.js';
+import {
+  agendaParamsSchema,
+  agendaQuerySchema,
+  eventIdParamsSchema,
+  listEventsQuerySchema,
+} from './calendar.schemas.js';
 
 export const calendarRouter = Router();
+const viewers = requireRole('admin', 'promotor', 'professor');
 
+calendarRouter.get('/events', viewers, validate({ query: listEventsQuerySchema }), calendarController.listEvents);
 calendarRouter.get(
-  '/events',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ query: listEventsQuerySchema }),
-  calendarController.listEvents,
+  '/agenda/:profileId',
+  requireRole('admin'),
+  validate({ params: agendaParamsSchema, query: agendaQuerySchema }),
+  calendarController.getAgenda,
 );
-
-calendarRouter.post(
-  '/events/:id/confirm',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ params: eventIdParamsSchema }),
-  calendarController.confirmEvent,
-);
-
-calendarRouter.post(
-  '/events/:id/decline',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ params: eventIdParamsSchema, body: declineEventSchema }),
-  calendarController.declineEvent,
-);
-
-calendarRouter.get(
-  '/events/:id/ics',
-  requireRole('admin', 'secretaria', 'coordenador'),
-  validate({ params: eventIdParamsSchema }),
-  calendarController.getIcs,
-);
+calendarRouter.get('/export.csv', requireRole('admin'), validate({ query: listEventsQuerySchema }), calendarController.exportCsv);
+calendarRouter.get('/events/:id/ics', viewers, validate({ params: eventIdParamsSchema }), calendarController.getIcs);

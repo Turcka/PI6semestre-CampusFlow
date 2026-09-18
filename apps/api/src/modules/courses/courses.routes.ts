@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -16,21 +16,21 @@ coursesRouter.get('/', validate({ query: listCoursesQuerySchema }), coursesContr
 
 coursesRouter.post(
   '/',
-  requireRole('admin', 'secretaria'),
+  requireRole('admin'),
   validate({ body: createCourseSchema }),
   coursesController.create,
 );
 
 coursesRouter.patch(
   '/:id',
-  requireRole('admin', 'secretaria'),
+  requireRole('admin'),
   validate({ params: courseIdParamsSchema, body: updateCourseSchema }),
   coursesController.patch,
 );
 
 coursesRouter.delete(
   '/:id',
-  requireRole('admin', 'secretaria'),
+  requireRole('admin'),
   validate({ params: courseIdParamsSchema }),
   coursesController.remove,
 );

@@ -29,10 +29,14 @@ const SAMPLE_VARS: Record<string, string> = {
   'candidato.nome': 'Maria Silva',
   'candidato.primeiro_nome': 'Maria',
   'candidato.curso': 'Engenharia de Software',
+  'candidato.resumo': 'Interesse em tecnologia e laboratórios.',
   'visita.data': '20/09/2026',
   'visita.hora': '14:00',
   'visita.tipo': 'individual',
-  'coordenador.nome': 'Prof. João',
+  'visita.link_aceite': 'https://app.example.com/convites/token',
+  'visita.roteiro': 'Laboratório, biblioteca e área de convivência',
+  'promotor.nome': 'João Souza',
+  'professor.nome': 'Prof. Ana',
   'campus.nome': 'Campus Centro',
   'campus.endereco': 'Rua Exemplo, 100',
   'campus.link_mapa': 'https://maps.example.com',
@@ -168,7 +172,7 @@ export async function createCampaign(req: Request, input: CreateCampaign) {
   const { user, supabase } = requireUser(req);
 
   let leadsQuery = supabase
-    .from('leads')
+    .from('candidates')
     .select('id, email, phone, full_name')
     .eq('tenant_id', user.tenantId)
     .eq('hygiene_status', 'valid')
@@ -225,7 +229,7 @@ export async function createCampaign(req: Request, input: CreateCampaign) {
     return [
       {
         tenant_id: user.tenantId,
-        lead_id: lead.id,
+        candidate_id: lead.id,
         campaign_id: campaign.id,
         template_id: template.id,
         channel: input.channel,
@@ -263,7 +267,7 @@ export async function listLogs(req: Request, query: ListLogs) {
 
   if (query.channel) q = q.eq('channel', query.channel);
   if (query.status) q = q.eq('status', query.status);
-  if (query.leadId) q = q.eq('lead_id', query.leadId);
+  if (query.candidateId) q = q.eq('candidate_id', query.candidateId);
   if (query.campaignId) q = q.eq('campaign_id', query.campaignId);
   if (query.from) q = q.gte('created_at', query.from);
   if (query.to) q = q.lte('created_at', query.to);

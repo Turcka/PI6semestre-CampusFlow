@@ -1,9 +1,7 @@
-import { uuidSchema } from '@campusflow/shared';
+﻿import { uuidSchema } from '@campusflow/shared';
 import { z } from 'zod';
 
-export const listRulesQuerySchema = z.object({
-  coordinatorId: uuidSchema.optional(),
-});
+export const listRulesQuerySchema = z.object({ ownerId: uuidSchema.optional() });
 
 const ruleInputSchema = z
   .object({
@@ -22,23 +20,23 @@ const ruleInputSchema = z
   });
 
 export const putRulesSchema = z.object({
-  coordinatorId: uuidSchema.optional(),
+  ownerId: uuidSchema.optional(),
   campusId: uuidSchema,
   rules: z.array(ruleInputSchema),
 });
 
 export const createExceptionSchema = z.object({
-  coordinatorId: uuidSchema.optional(),
+  ownerId: uuidSchema.optional(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
-  kind: z.enum(['block', 'extra']).default('block'),
+  kind: z.enum(['block', 'extra', 'last_minute']).default('block'),
   reason: z.string().trim().max(300).optional(),
 });
 
 export const exceptionIdParamsSchema = z.object({ id: uuidSchema });
 
 export const listExceptionsQuerySchema = z.object({
-  coordinatorId: uuidSchema.optional(),
+  ownerId: uuidSchema.optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
 });

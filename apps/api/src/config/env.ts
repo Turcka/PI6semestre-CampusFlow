@@ -18,6 +18,10 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_JWT_SECRET: z.string().optional(),
 
+  WHATSAPP_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
   WHATSAPP_API_VERSION: z.string().default('v20.0'),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
@@ -27,6 +31,11 @@ const envSchema = z.object({
   SENDGRID_FROM_EMAIL: z.string().email().optional(),
   SENDGRID_FROM_NAME: z.string().optional(),
   SENDGRID_WEBHOOK_PUBLIC_KEY: z.string().optional(),
+
+  RUBEUS_BASE_URL: z.string().url().optional(),
+  RUBEUS_API_TOKEN: z.string().optional(),
+  RUBEUS_ORIGIN_ID: z.string().optional(),
+  RUBEUS_WEBHOOK_SECRET: z.string().optional(),
 
   QUEUE_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
   QUEUE_VISIBILITY_TIMEOUT_S: z.coerce.number().int().positive().default(60),

@@ -1,6 +1,7 @@
 import {
   COMMUNICATION_TRIGGERS,
   MESSAGE_CHANNELS,
+  NOTIFICATION_AUDIENCES,
   messageTemplateSchema,
   paginationQuerySchema,
   uuidSchema,
@@ -22,7 +23,7 @@ export const putRulesSchema = z.object({
       channel: z.enum(MESSAGE_CHANNELS),
       templateId: uuidSchema,
       offsetMinutes: z.number().int().default(0),
-      audience: z.enum(['candidate', 'coordinator', 'both']).default('candidate'),
+      audience: z.enum(NOTIFICATION_AUDIENCES).default('candidato'),
       isActive: z.boolean().default(true),
     }),
   ),
@@ -39,7 +40,7 @@ export const createCampaignSchema = z.object({
 export const listLogsQuerySchema = paginationQuerySchema.extend({
   channel: z.enum(MESSAGE_CHANNELS).optional(),
   status: z.string().optional(),
-  leadId: uuidSchema.optional(),
+  candidateId: uuidSchema.optional(),
   campaignId: uuidSchema.optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),

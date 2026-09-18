@@ -1,4 +1,3 @@
-import { createVisitSchema } from '@campusflow/shared';
 import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
@@ -8,51 +7,76 @@ import {
   cancelVisitSchema,
   generateSlotsSchema,
   listVisitsQuerySchema,
-  publicSlotsQuerySchema,
+  publicScheduleVisitSchema,
+  publicWindowsQuerySchema,
   rescheduleVisitSchema,
+  schedulingPolicySchema,
   visitIdParamsSchema,
 } from './scheduling.schemas.js';
 
 export const schedulingRouter = Router();
+const managers = requireRole('admin', 'promotor', 'professor');
+const adminOnly = requireRole('admin');
 
 schedulingRouter.post(
   '/slots/generate',
-  requireRole('admin', 'secretaria', 'coordenador'),
+  managers,
   validate({ body: generateSlotsSchema }),
   schedulingController.generateSlots,
 );
 
 schedulingRouter.get(
   '/visits',
-  requireRole('admin', 'secretaria', 'coordenador'),
+  managers,
   validate({ query: listVisitsQuerySchema }),
   schedulingController.listVisits,
 );
 
 schedulingRouter.patch(
   '/visits/:id/cancel',
-  requireRole('admin', 'secretaria', 'coordenador'),
+  adminOnly,
   validate({ params: visitIdParamsSchema, body: cancelVisitSchema }),
   schedulingController.cancelVisit,
 );
 
 schedulingRouter.post(
   '/visits/:id/reschedule',
-  requireRole('admin', 'secretaria', 'coordenador'),
+  adminOnly,
   validate({ params: visitIdParamsSchema, body: rescheduleVisitSchema }),
   schedulingController.rescheduleVisit,
 );
 
+schedulingRouter.get('/policies', adminOnly, schedulingController.getPolicies);
+schedulingRouter.put('/policies', adminOnly, validate({ body: schedulingPolicySchema }), schedulingController.putPolicy);
+
 export const publicSchedulingRouter = Router();
 
 publicSchedulingRouter.get(
-  '/slots',
-  validate({ query: publicSlotsQuerySchema }),
-  schedulingController.listPublicSlots,
+  '/windows',
+  validate({ query: publicWindowsQuerySchema }),
+  schedulingController.listPublicWindows,
 );
 
 publicSchedulingRouter.post(
   '/visits',
-  validate({ body: createVisitSchema }),
+  validate({ body: publicScheduleVisitSchema }),
   schedulingController.createPublicVisit,
+);
+
+publicSchedulingRouter.get(
+  '/visits/:id',
+  validate({ params: visitIdParamsSchema }),
+  schedulingController.getPublicVisit,
+);
+
+publicSchedulingRouter.post(
+  '/visits/:id/cancel',
+  validate({ params: visitIdParamsSchema, body: cancelVisitSchema }),
+  schedulingController.cancelPublicVisit,
+);
+
+publicSchedulingRouter.post(
+  '/visits/:id/reschedule',
+  validate({ params: visitIdParamsSchema, body: rescheduleVisitSchema }),
+  schedulingController.reschedulePublicVisit,
 );

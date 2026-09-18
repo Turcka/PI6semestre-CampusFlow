@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { getAdminClient } from '../config/supabase.js';
 import { publicRateLimit } from '../middlewares/rate-limit.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
-import { publicCheckinRouter } from '../modules/checkin/checkin.routes.js';
-import { publicLeadsRouter } from '../modules/leads/leads.routes.js';
+import { publicCandidatesRouter } from '../modules/candidates/candidates.routes.js';
+import { publicChatbotRouter } from '../modules/chatbot/chatbot.routes.js';
 import { publicMapRouter } from '../modules/map/map.routes.js';
 import { publicSchedulingRouter } from '../modules/scheduling/scheduling.routes.js';
 import { AppError } from '../utils/app-error.js';
@@ -16,10 +16,11 @@ export const publicRouter = Router();
 
 publicRouter.use(publicRateLimit);
 
-publicRouter.use('/leads', publicLeadsRouter);
+publicRouter.use('/candidates', publicCandidatesRouter);
+publicRouter.use('/leads', publicCandidatesRouter);
+publicRouter.use('/chatbot', publicChatbotRouter);
 publicRouter.use('/scheduling', publicSchedulingRouter);
 publicRouter.use('/map', publicMapRouter);
-publicRouter.use('/checkin', publicCheckinRouter);
 
 publicRouter.get(
   '/campuses/:slug',

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -18,7 +18,7 @@ import {
 
 export const mapRouter = Router();
 
-const editors = requireRole('admin', 'secretaria');
+const editors = requireRole('admin');
 
 mapRouter.get('/pois', mapController.listPois);
 mapRouter.post('/pois', editors, validate({ body: createPoiSchema }), mapController.createPoi);

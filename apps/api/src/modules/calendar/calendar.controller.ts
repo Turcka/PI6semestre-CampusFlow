@@ -7,12 +7,15 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
   res.json(await calendarService.listEvents(req, req.query as never));
 });
 
-export const confirmEvent = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await calendarService.confirmEvent(req, req.params.id!));
+export const getAgenda = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await calendarService.getAgenda(req, req.params.profileId!, req.query as never));
 });
 
-export const declineEvent = asyncHandler(async (req: Request, res: Response) => {
-  res.json(await calendarService.declineEvent(req, req.params.id!, req.body));
+export const exportCsv = asyncHandler(async (req: Request, res: Response) => {
+  const csv = await calendarService.exportCsv(req, req.query as never);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="agenda.csv"');
+  res.send(csv);
 });
 
 export const getIcs = asyncHandler(async (req: Request, res: Response) => {
