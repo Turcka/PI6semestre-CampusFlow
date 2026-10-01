@@ -63,7 +63,7 @@ async function getSessionQuestions(session: SessionRow) {
 
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
-  return (data ?? []) as QuestionRow[];
+  return ((data ?? []) as QuestionRow[]).filter((question) => question.key !== 'disponibilidade');
 }
 
 export async function getNextQuestion(sessionId: string) {

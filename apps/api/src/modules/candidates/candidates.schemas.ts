@@ -61,3 +61,8 @@ export const listCandidatesQuerySchema = paginationQuerySchema.extend({
 
 export const candidateIdParamsSchema = z.object({ id: uuidSchema });
 export const candidateTokenQuerySchema = z.object({ token: uuidSchema });
+
+/** Lookup de portal por e-mail — apenas para testes / ambiente não-produção. */
+export const lookupByEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});

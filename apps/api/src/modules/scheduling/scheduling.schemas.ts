@@ -29,8 +29,8 @@ export const cancelVisitSchema = z.object({
 });
 
 export const rescheduleVisitSchema = z.object({
-  windowStart: z.string().datetime(),
-  windowEnd: z.string().datetime(),
+  windowStart: z.string().datetime({ offset: true }),
+  windowEnd: z.string().datetime({ offset: true }),
   reason: z.string().trim().max(500).optional(),
   portalToken: uuidSchema.optional(),
 });

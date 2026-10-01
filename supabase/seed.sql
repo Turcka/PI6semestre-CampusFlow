@@ -130,13 +130,6 @@ values
     ]'::jsonb, 3
   ),
   (
-    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb04',
-    '11111111-1111-1111-1111-111111111111', 'candidato', 'disponibilidade',
-    'Informe sua disponibilidade para a visita (dias e horários).',
-    'free_text',
-    '[]'::jsonb, 4
-  ),
-  (
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb05',
     '11111111-1111-1111-1111-111111111111', 'candidato', 'duvidas',
     'Há alguma dúvida específica que gostaria de esclarecer na visita?',
@@ -187,6 +180,10 @@ values
     ]'::jsonb, 20
   )
 on conflict (id) do nothing;
+
+update public.chatbot_questions
+set is_active = false
+where key = 'disponibilidade';
 
 update public.chatbot_questions
 set course_id = '33333333-3333-3333-3333-333333333302'

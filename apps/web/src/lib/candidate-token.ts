@@ -6,6 +6,9 @@ export type CandidateSessionState = {
   portalToken: string;
   candidateId: string;
   campusSlug: string;
+  /** Etapa da jornada a retomar (0 cadastro … 3 horário). */
+  step?: number;
+  profileSummary?: string | null;
 };
 
 export function saveCandidateSession(state: CandidateSessionState) {
@@ -32,5 +35,9 @@ export function clearCandidateSession() {
 }
 
 export function setPortalToken(token: string) {
+  if (!token) {
+    localStorage.removeItem(TOKEN_KEY);
+    return;
+  }
   localStorage.setItem(TOKEN_KEY, token);
 }

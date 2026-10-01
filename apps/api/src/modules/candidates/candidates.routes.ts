@@ -7,6 +7,7 @@ import {
   candidateIdParamsSchema,
   candidateTokenQuerySchema,
   listCandidatesQuerySchema,
+  lookupByEmailSchema,
   publicCandidatePatchSchema,
   publicCandidateSchema,
   updateCandidateSchema,
@@ -25,6 +26,11 @@ candidatesRouter.patch(
 
 export const publicCandidatesRouter = Router();
 publicCandidatesRouter.post('/', validate({ body: publicCandidateSchema }), candidatesController.createPublic);
+publicCandidatesRouter.post(
+  '/lookup-by-email',
+  validate({ body: lookupByEmailSchema }),
+  candidatesController.lookupByEmail,
+);
 publicCandidatesRouter.get('/me', validate({ query: candidateTokenQuerySchema }), candidatesController.getMe);
 publicCandidatesRouter.patch(
   '/me',

@@ -175,6 +175,33 @@ async function ensureUser(spec) {
       );
       if (courseError) throw courseError;
     }
+
+    await admin.from('availability_rules').delete().eq('owner_id', user.id).eq('campus_id', CAMPUS_ID);
+    const rules = [1, 2, 3, 4, 5].map((weekday) => ({
+      tenant_id: TENANT_ID,
+      owner_id: user.id,
+      campus_id: CAMPUS_ID,
+      weekday,
+      start_time: '10:00:00',
+      end_time: '16:00:00',
+      slot_duration_minutes: 60,
+      capacity: 1,
+      is_active: true,
+    }));
+    const { error: rulesError } = await admin.from('availability_rules').insert(rules);
+    if (rulesError) throw rulesError;
+
+    const from = new Date();
+    const to = new Date();
+    to.setDate(to.getDate() + 30);
+    const { error: slotsError } = await admin.rpc('generate_visit_slots', {
+      p_tenant_id: TENANT_ID,
+      p_from: from.toISOString().slice(0, 10),
+      p_to: to.toISOString().slice(0, 10),
+      p_owner_id: user.id,
+    });
+    if (slotsError) console.warn(`! generate_visit_slots professor: ${slotsError.message}`);
+    await admin.from('visit_slots').update({ owner_role: 'professor' }).eq('owner_id', user.id);
   }
 
   return user;

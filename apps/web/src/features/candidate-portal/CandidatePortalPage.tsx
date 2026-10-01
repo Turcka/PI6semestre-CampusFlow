@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { Badge, Button, Card, EmptyState, Input, Label, Spinner } from '@/components/ui';
-import { publicApi } from '@/lib/api';
-import { getPortalToken, setPortalToken } from '@/lib/candidate-token';
+import { Badge, Button, Card, EmptyState, FieldError, Input, Label, Spinner } from '@/components/ui';
+import { ApiError, publicApi } from '@/lib/api';
+import { getPortalToken, saveCandidateSession, setPortalToken } from '@/lib/candidate-token';
 import { formatDateTime, parseTstzrange } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -18,6 +18,8 @@ type CandidateMe = {
   profile_summary: string | null;
   profile_completed_at: string | null;
   portal_token: string;
+  campus_slug: string | null;
+  session_id: string | null;
 };
 
 type CandidateVisit = {
@@ -30,13 +32,25 @@ type CandidateVisit = {
   created_at: string;
 };
 
+type LookupResult = {
+  candidateId: string;
+  fullName: string;
+  email: string;
+  portalToken: string;
+};
+
+const allowEmailLookup = import.meta.env.DEV || import.meta.env.VITE_ALLOW_PORTAL_EMAIL_LOOKUP === 'true';
+
 export function CandidatePortalPage() {
   const [params, setParams] = useSearchParams();
   const tokenFromUrl = params.get('token');
   const stored = getPortalToken();
+  const [emailInput, setEmailInput] = useState('');
   const [tokenInput, setTokenInput] = useState(tokenFromUrl ?? stored ?? '');
+  const [accessError, setAccessError] = useState<string | null>(null);
   const token = tokenFromUrl ?? stored;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const meQuery = useQuery({
     queryKey: queryKeys.candidateMe(token ?? ''),
@@ -48,6 +62,22 @@ export function CandidatePortalPage() {
     queryKey: queryKeys.candidateVisits(token ?? ''),
     queryFn: () => publicApi<CandidateVisit[]>(`/candidates/me/visits?token=${token}`),
     enabled: Boolean(token),
+  });
+
+  const lookupMutation = useMutation({
+    mutationFn: (email: string) =>
+      publicApi<LookupResult>('/candidates/lookup-by-email', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    onSuccess: (data) => {
+      setAccessError(null);
+      setPortalToken(data.portalToken);
+      setParams({ token: data.portalToken });
+    },
+    onError: (err) => {
+      setAccessError(err instanceof ApiError ? err.message : 'Não foi possível localizar a visita.');
+    },
   });
 
   const cancelMutation = useMutation({
@@ -68,19 +98,58 @@ export function CandidatePortalPage() {
     return (
       <Card className="space-y-4">
         <h1 className="text-xl font-bold text-slate-900">Minha visita</h1>
-        <p className="text-sm text-slate-600">Cole o token recebido por e-mail ou continue uma sessão recente.</p>
-        <div>
-          <Label htmlFor="token">Portal token</Label>
-          <Input id="token" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} />
-        </div>
-        <Button
-          onClick={() => {
-            setPortalToken(tokenInput.trim());
-            setParams({ token: tokenInput.trim() });
-          }}
-        >
-          Acessar
-        </Button>
+        <p className="text-sm text-slate-600">
+          {allowEmailLookup
+            ? 'Informe o e-mail usado no cadastro para acompanhar a visita (modo teste).'
+            : 'Cole o token recebido por e-mail ou continue uma sessão recente.'}
+        </p>
+
+        {allowEmailLookup ? (
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="email">E-mail cadastrado</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="voce@email.com"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+              />
+            </div>
+            <Button
+              disabled={!emailInput.trim() || lookupMutation.isPending}
+              onClick={() => {
+                setAccessError(null);
+                lookupMutation.mutate(emailInput.trim().toLowerCase());
+              }}
+            >
+              {lookupMutation.isPending ? 'Buscando…' : 'Acessar com e-mail'}
+            </Button>
+            <FieldError>{accessError}</FieldError>
+            <p className="text-xs text-slate-500">Disponível apenas em ambiente de desenvolvimento/teste.</p>
+          </div>
+        ) : null}
+
+        <details className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">Acesso com portal token</summary>
+          <div className="mt-3 space-y-3">
+            <div>
+              <Label htmlFor="token">Portal token</Label>
+              <Input id="token" value={tokenInput} onChange={(e) => setTokenInput(e.target.value)} />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setPortalToken(tokenInput.trim());
+                setParams({ token: tokenInput.trim() });
+              }}
+            >
+              Acessar com token
+            </Button>
+          </div>
+        </details>
+
         <Link className="text-sm text-brand-700 hover:underline" to="/visita/sao-caetano">
           Ou agendar uma nova visita
         </Link>
@@ -94,11 +163,16 @@ export function CandidatePortalPage() {
     return (
       <EmptyState
         title="Não encontramos sua visita"
-        description="O token pode estar inválido. Tente novamente ou inicie um novo agendamento."
+        description="O e-mail ou token pode estar inválido. Tente novamente ou inicie um novo agendamento."
         action={
-          <Link to="/visita/sao-caetano">
-            <Button>Agendar visita</Button>
-          </Link>
+          <Button
+            onClick={() => {
+              setPortalToken('');
+              setParams({});
+            }}
+          >
+            Tentar de novo
+          </Button>
         }
       />
     );
@@ -148,11 +222,25 @@ export function CandidatePortalPage() {
       ) : (
         <EmptyState
           title="Nenhuma visita encontrada"
-          description="Você ainda não possui visitas neste portal."
+          description="Seu cadastro e questionário já estão salvos. Continue escolhendo um horário."
           action={
-            <Link to="/visita/sao-caetano">
-              <Button>Agendar agora</Button>
-            </Link>
+            <Button
+              onClick={() => {
+                const campusSlug = me.campus_slug ?? 'sao-caetano';
+                const resumeStep = me.profile_completed_at ? 3 : me.session_id ? 1 : 0;
+                saveCandidateSession({
+                  sessionId: me.session_id ?? '',
+                  portalToken: me.portal_token,
+                  candidateId: me.id,
+                  campusSlug,
+                  step: resumeStep,
+                  profileSummary: me.profile_summary,
+                });
+                navigate(`/visita/${campusSlug}`);
+              }}
+            >
+              Agendar agora
+            </Button>
           }
         />
       )}

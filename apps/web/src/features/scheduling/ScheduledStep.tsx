@@ -8,10 +8,20 @@ type Props = {
   status: string;
   period: string;
   professorRequested?: boolean;
+  promoterName?: string | null;
+  professorName?: string | null;
   portalToken: string;
 };
 
-export function ScheduledStep({ visitId, status, period, professorRequested, portalToken }: Props) {
+export function ScheduledStep({
+  visitId,
+  status,
+  period,
+  professorRequested,
+  promoterName,
+  professorName,
+  portalToken,
+}: Props) {
   const range = parseTstzrange(period);
 
   return (
@@ -30,7 +40,10 @@ export function ScheduledStep({ visitId, status, period, professorRequested, por
         ) : (
           <p className="text-sm text-slate-600">Horário registrado.</p>
         )}
-        {professorRequested ? (
+        {promoterName ? <p className="text-sm text-slate-700">Promotor: {promoterName}</p> : null}
+        {professorName ? (
+          <p className="text-sm text-slate-700">Professor: {professorName}</p>
+        ) : professorRequested ? (
           <p className="text-sm text-slate-600">Um professor também foi solicitado para esta visita.</p>
         ) : null}
         <p className="text-xs text-slate-500">Código da visita: {visitId}</p>

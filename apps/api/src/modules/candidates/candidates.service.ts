@@ -1,6 +1,7 @@
 ﻿import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { env } from '../../config/env.js';
 import { getAdminClient } from '../../config/supabase.js';
 import { AppError } from '../../utils/app-error.js';
 import { paginatedResponse, parsePagination } from '../../utils/pagination.js';
@@ -153,7 +154,25 @@ async function getCandidateByToken(token: string) {
 }
 
 export async function getPublicMe(token: string) {
-  return getCandidateByToken(token);
+  const candidate = await getCandidateByToken(token);
+  const admin = getAdminClient();
+
+  const [{ data: campus }, { data: session }] = await Promise.all([
+    admin.from('campuses').select('slug, name').eq('id', candidate.campus_id).maybeSingle(),
+    admin
+      .from('chatbot_sessions')
+      .select('id')
+      .eq('candidate_id', candidate.id)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return {
+    ...candidate,
+    campus_slug: campus?.slug ?? null,
+    session_id: session?.id ?? null,
+  };
 }
 
 export async function updatePublicMe(token: string, input: PublicPatch) {
@@ -183,4 +202,35 @@ export async function listPublicVisits(token: string) {
     .order('created_at', { ascending: false });
   if (error) throw AppError.badRequest(error.message);
   return data ?? [];
+}
+
+function isPortalEmailLookupAllowed() {
+  return env.NODE_ENV !== 'production' || env.ALLOW_PORTAL_EMAIL_LOOKUP;
+}
+
+/** Acesso ao portal só com e-mail — exclusivo para testes locais. */
+export async function lookupPortalByEmail(email: string) {
+  if (!isPortalEmailLookupAllowed()) {
+    throw AppError.forbidden('Lookup por e-mail disponível apenas em ambiente de teste.');
+  }
+
+  const admin = getAdminClient();
+  const { data, error } = await admin
+    .from('candidates')
+    .select('id, full_name, email, portal_token, created_at')
+    .eq('email', email.trim().toLowerCase())
+    .is('anonymized_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw AppError.badRequest(error.message);
+  if (!data) throw AppError.notFound('Nenhum candidato encontrado com este e-mail.');
+
+  return {
+    candidateId: data.id,
+    fullName: data.full_name,
+    email: data.email,
+    portalToken: data.portal_token,
+  };
 }

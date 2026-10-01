@@ -43,6 +43,11 @@ const envSchema = z.object({
 
   MAPBOX_ACCESS_TOKEN: z.string().optional(),
 
+  ALLOW_PORTAL_EMAIL_LOOKUP: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+
   WEB_BASE_URL: z.string().url().default('http://localhost:5173'),
   API_BASE_URL: z.string().url().default('http://localhost:3333'),
 });

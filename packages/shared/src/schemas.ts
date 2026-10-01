@@ -91,10 +91,13 @@ export const publicLeadSchema = publicCandidateSchema;
 export type PublicLeadInput = PublicCandidateInput;
 
 /** Agendamento público via match (janela tstzrange ISO). */
+/** Instante ISO-8601 com `Z` ou deslocamento (`+00:00`), como o Postgres devolve. */
+const isoDateTimeSchema = z.string().datetime({ offset: true });
+
 export const scheduleVisitSchema = z.object({
   candidateId: uuidSchema,
-  windowStart: z.string().datetime(),
-  windowEnd: z.string().datetime(),
+  windowStart: isoDateTimeSchema,
+  windowEnd: isoDateTimeSchema,
   portalToken: uuidSchema.optional(),
 });
 export type ScheduleVisitInput = z.infer<typeof scheduleVisitSchema>;

@@ -123,9 +123,54 @@ export async function listPublicWindows(query: PublicWindows) {
   if (error) throw AppError.badRequest(error.message);
 
   const openSlots = (slots ?? []).filter((s) => s.booked_count < s.capacity);
+  const ownerIds = [...new Set(openSlots.map((slot) => slot.owner_id))];
+  const { data: owners } = ownerIds.length
+    ? await admin.from('profiles').select('id, full_name').in('id', ownerIds)
+    : { data: [] as Array<{ id: string; full_name: string }> };
+  const ownerName = new Map((owners ?? []).map((owner) => [owner.id, owner.full_name]));
+
+  let professorSlots: Array<{ owner_id: string; starts_at: string; ends_at: string }> = [];
+  if (candidate.campus_id) {
+    const { data: professorRows, error: professorError } = await admin
+      .from('visit_slots')
+      .select('owner_id, starts_at, ends_at, booked_count, capacity')
+      .eq('is_open', true)
+      .eq('owner_role', 'professor')
+      .eq('campus_id', candidate.campus_id)
+      .gte('starts_at', query.from)
+      .lte('starts_at', query.to);
+    if (professorError) throw AppError.badRequest(professorError.message);
+    professorSlots = (professorRows ?? []).filter((slot) => slot.booked_count < slot.capacity);
+  }
+
+  const professorIds = [...new Set(professorSlots.map((slot) => slot.owner_id))];
+  let eligibleProfessors = new Set(professorIds);
+  if (professorIds.length && candidate.course_id) {
+    const { data: links, error: linkError } = await admin
+      .from('professor_courses')
+      .select('professor_id')
+      .eq('course_id', candidate.course_id)
+      .in('professor_id', professorIds);
+    if (linkError) throw AppError.badRequest(linkError.message);
+    eligibleProfessors = new Set((links ?? []).map((link) => link.professor_id));
+  }
+
+  const { data: professorProfiles } = professorIds.length
+    ? await admin.from('profiles').select('id, full_name').in('id', professorIds)
+    : { data: [] as Array<{ id: string; full_name: string }> };
+  const professorName = new Map((professorProfiles ?? []).map((profile) => [profile.id, profile.full_name]));
+
+  const professorFor = (startsAt: string, endsAt: string) => {
+    const match = professorSlots.find(
+      (slot) => slot.starts_at === startsAt && slot.ends_at === endsAt && eligibleProfessors.has(slot.owner_id),
+    );
+    if (!match) return null;
+    return { id: match.owner_id, name: professorName.get(match.owner_id) ?? 'Professor' };
+  };
+
   const byDay = new Map<string, typeof openSlots>();
   for (const slot of openSlots) {
-    const day = slot.starts_at.slice(0, 10);
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(slot.starts_at));
     const list = byDay.get(day) ?? [];
     list.push(slot);
     byDay.set(day, list);
@@ -136,15 +181,19 @@ export async function listPublicWindows(query: PublicWindows) {
     campusId: candidate.campus_id,
     courseId: candidate.course_id,
     profileCompleted: Boolean(candidate.profile_completed_at),
-    days: [...byDay.entries()].map(([date, windows]) => ({
-      date,
-      windows: windows.map((w) => ({
-        startsAt: w.starts_at,
-        endsAt: w.ends_at,
-        capacity: w.capacity,
-        bookedCount: w.booked_count,
+    days: [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, windows]) => ({
+        date,
+        windows: windows.map((window) => ({
+          startsAt: window.starts_at,
+          endsAt: window.ends_at,
+          capacity: window.capacity,
+          bookedCount: window.booked_count,
+          promoter: { id: window.owner_id, name: ownerName.get(window.owner_id) ?? 'Promotor' },
+          professor: professorFor(window.starts_at, window.ends_at),
+        })),
       })),
-    })),
   };
 }
 
@@ -163,15 +212,24 @@ export async function createPublicVisit(input: PublicSchedule) {
     id: string;
     status: string;
     period: string;
+    promoter_id: string | null;
     professor_id: string | null;
     professor_requirement?: string | null;
   };
+
+  const personIds = [visit.promoter_id, visit.professor_id].filter((id): id is string => Boolean(id));
+  const { data: people } = personIds.length
+    ? await admin.from('profiles').select('id, full_name').in('id', personIds)
+    : { data: [] as Array<{ id: string; full_name: string }> };
+  const names = new Map((people ?? []).map((person) => [person.id, person.full_name]));
 
   return {
     visitId: visit.id,
     status: visit.status,
     period: visit.period,
     professorRequested: Boolean(visit.professor_id) || visit.professor_requirement === 'required',
+    promoterName: visit.promoter_id ? (names.get(visit.promoter_id) ?? null) : null,
+    professorName: visit.professor_id ? (names.get(visit.professor_id) ?? null) : null,
   };
 }
 

@@ -30,3 +30,7 @@ export const patchMe = asyncHandler(async (req: Request, res: Response) => {
 export const listMeVisits = asyncHandler(async (req: Request, res: Response) => {
   res.json(await candidatesService.listPublicVisits(String(req.query.token)));
 });
+
+export const lookupByEmail = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await candidatesService.lookupPortalByEmail(req.body.email));
+});

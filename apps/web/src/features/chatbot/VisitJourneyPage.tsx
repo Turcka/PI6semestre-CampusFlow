@@ -14,9 +14,11 @@ const STEPS = ['Cadastro', 'Questionário', 'Revisão', 'Horário', 'Confirmaç�
 export function VisitJourneyPage() {
   const { campusSlug = 'sao-caetano' } = useParams();
   const existing = loadCandidateSession();
+  const canResume = Boolean(existing && existing.campusSlug === campusSlug && existing.candidateId && existing.portalToken);
   const [step, setStep] = useState(() => {
-    if (!existing || existing.campusSlug !== campusSlug) return 0;
-    return 1;
+    if (!canResume || !existing) return 0;
+    if (existing.step != null) return existing.step;
+    return existing.sessionId ? 1 : 0;
   });
   const [sessionId, setSessionId] = useState(existing?.sessionId ?? '');
   const [portalToken, setPortalToken] = useState(existing?.portalToken ?? '');
@@ -26,10 +28,26 @@ export function VisitJourneyPage() {
     status: string;
     period: string;
     professorRequested: boolean;
+    promoterName?: string | null;
+    professorName?: string | null;
   } | null>(null);
-  const [profileSummary, setProfileSummary] = useState<string | null>(null);
+  const [profileSummary, setProfileSummary] = useState<string | null>(existing?.profileSummary ?? null);
 
   const currentStepLabel = useMemo(() => STEPS[step] ?? '', [step]);
+
+  function persist(next: { sessionId?: string; portalToken?: string; candidateId?: string; step: number; profileSummary?: string | null }) {
+    const resolvedToken = next.portalToken ?? portalToken;
+    const resolvedCandidate = next.candidateId ?? candidateId;
+    if (!resolvedToken || !resolvedCandidate) return;
+    saveCandidateSession({
+      sessionId: next.sessionId ?? sessionId,
+      portalToken: resolvedToken,
+      candidateId: resolvedCandidate,
+      campusSlug,
+      step: next.step,
+      profileSummary: next.profileSummary ?? profileSummary,
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -48,6 +66,7 @@ export function VisitJourneyPage() {
                 portalToken: payload.portalToken,
                 candidateId: payload.candidateId,
                 campusSlug,
+                step: 1,
               });
               setSessionId(payload.sessionId);
               setPortalToken(payload.portalToken);
@@ -58,7 +77,13 @@ export function VisitJourneyPage() {
         ) : null}
 
         {step === 1 && sessionId ? (
-          <ChatbotConversation sessionId={sessionId} onFinished={() => setStep(2)} />
+          <ChatbotConversation
+            sessionId={sessionId}
+            onFinished={() => {
+              persist({ step: 2 });
+              setStep(2);
+            }}
+          />
         ) : null}
 
         {step === 2 && sessionId ? (
@@ -66,6 +91,7 @@ export function VisitJourneyPage() {
             sessionId={sessionId}
             onCompleted={(result) => {
               setProfileSummary(result.summary);
+              persist({ step: 3, profileSummary: result.summary });
               setStep(3);
             }}
           />
@@ -93,6 +119,8 @@ export function VisitJourneyPage() {
             status={scheduled.status}
             period={scheduled.period}
             professorRequested={scheduled.professorRequested}
+            promoterName={scheduled.promoterName}
+            professorName={scheduled.professorName}
             portalToken={portalToken}
           />
         ) : null}
