@@ -8,10 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "npm run dev --workspace apps/api",
     "dev:worker": "npm run dev:worker --workspace apps/api",
     "dev:web": "npm run dev --workspace apps/web",
+    "dev:full": "concurrently -k -n api,web,worker -c cyan,magenta,yellow \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:worker\"",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
@@ -27,6 +28,7 @@
     "db:local:reset": "supabase db reset"
   },
   "devDependencies": {
+    "concurrently": "^9.2.4",
     "dotenv": "^16.6.1",
     "pg": "^8.23.0",
     "prettier": "^3.3.3",

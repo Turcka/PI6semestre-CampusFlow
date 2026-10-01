@@ -57,27 +57,40 @@ PI6semestre-CampusFlow/
 
 ## Como rodar (desenvolvimento)
 
-Pré-requisitos: Node.js 20+, npm 10+, Docker (para o Supabase local) e [Supabase CLI](https://supabase.com/docs/guides/cli).
+Pré-requisitos: Node.js 20+, npm 10+. O banco pode ser o Supabase remoto (já configurado em `apps/api/.env`) ou local com Docker + [Supabase CLI](https://supabase.com/docs/guides/cli).
 
 ```bash
-# 1. Instalar dependências de todos os workspaces
+# 1. Instalar dependências
 npm install
 
-# 2. Subir o Supabase local (Postgres, Auth, Storage, Studio)
-npm run db:start
-
-# 3. Aplicar migrações e seeds
+# 2. (Opcional) Supabase local — só se não estiver usando o projeto remoto
+npm run db:local:start
 npm run db:reset
 
-# 4. Configurar variáveis de ambiente
-cp .env.example .env
+# 3. Garantir .env (se ainda não existirem)
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 
-# 5. Rodar API e frontend
-npm run dev:api   # http://localhost:3333
-npm run dev:web   # http://localhost:5173
+# 4. Subir API + frontend juntos
+npm run dev
 ```
+
+| URL | Serviço |
+| --- | --- |
+| http://localhost:3333 | API |
+| http://localhost:5173 | Frontend |
+
+Scripts úteis:
+
+| Comando | O que faz |
+| --- | --- |
+| `npm run dev` | API + frontend (o dia a dia) |
+| `npm run dev:api` | Só a API |
+| `npm run dev:web` | Só o frontend |
+| `npm run seed:users` | Cria admin / promotor / professor de demo |
+| `npm run dev:full` | API + frontend + worker de filas |
+
+Contas de demo (após `npm run seed:users`): `admin@campusflow.local`, `promotor@campusflow.local`, `professor@campusflow.local` — senha `CampusFlow123!`.
 
 ## Roadmap
 
