@@ -92,11 +92,29 @@ export function WindowPicker({ candidateId, portalToken, onScheduled }: Props) {
 
   if (windowsQuery.isLoading) return <Spinner label="Buscando horários com promotor elegível…" />;
 
+  if (windowsQuery.isError) {
+    const message =
+      windowsQuery.error instanceof ApiError
+        ? windowsQuery.error.message
+        : 'Não foi possível carregar os horários. Verifique se a API está no ar.';
+    return (
+      <EmptyState
+        title="Falha ao buscar horários"
+        description={message}
+        action={
+          <Button variant="secondary" onClick={() => void windowsQuery.refetch()}>
+            Tentar de novo
+          </Button>
+        }
+      />
+    );
+  }
+
   if (!days.length) {
     return (
       <EmptyState
         title="Sem horários disponíveis"
-        description="Não há janelas com promotor elegível nos próximos dias. Tente mais tarde ou fale com a instituição."
+        description="Não há promotor com disponibilidade nos próximos dias. Peça ao admin para cadastrar um promotor e gerar slots (ou rode npm run seed:users)."
         action={
           <Button variant="secondary" onClick={() => void windowsQuery.refetch()}>
             Atualizar

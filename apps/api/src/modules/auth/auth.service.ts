@@ -1,4 +1,4 @@
-﻿import type { InviteUserInput } from '@campusflow/shared';
+﻿import type { CreateUserInput, InviteUserInput } from '@campusflow/shared';
 import type { Request } from 'express';
 
 import { getAdminClient } from '../../config/supabase.js';
@@ -42,13 +42,36 @@ export async function getMe(req: Request) {
 async function ensureSpecificProfile(userId: string, role: InviteUserInput['role']) {
   const admin = getAdminClient();
   if (role === 'promotor') {
-    const { error } = await admin.from('promoter_profiles').upsert({ profile_id: userId });
+    const { error } = await admin.from('promoter_profiles').upsert({
+      profile_id: userId,
+      accepts_auto_match: true,
+      max_visits_per_day: 4,
+    });
     if (error) throw AppError.badRequest(error.message);
   }
   if (role === 'professor') {
-    const { error } = await admin.from('professor_profiles').upsert({ profile_id: userId });
+    const { error } = await admin.from('professor_profiles').upsert({
+      profile_id: userId,
+      accepts_visits: true,
+      is_substitute: false,
+    });
     if (error) throw AppError.badRequest(error.message);
   }
+}
+
+async function linkCourses(userId: string, role: InviteUserInput['role'], courseIds?: string[]) {
+  if (!courseIds?.length || role === 'admin') return;
+  const admin = getAdminClient();
+  const table = role === 'professor' ? 'professor_courses' : 'promoter_courses';
+  const idColumn = role === 'professor' ? 'professor_id' : 'promoter_id';
+  await admin.from(table).delete().eq(idColumn, userId);
+  const rows = courseIds.map((courseId) =>
+    role === 'professor'
+      ? { professor_id: userId, course_id: courseId, is_primary: true }
+      : { promoter_id: userId, course_id: courseId, familiarity: 3 },
+  );
+  const { error } = await admin.from(table).upsert(rows);
+  if (error) throw AppError.badRequest(error.message);
 }
 
 export async function inviteUser(req: Request, input: InviteUserInput) {
@@ -63,14 +86,7 @@ export async function inviteUser(req: Request, input: InviteUserInput) {
   if (!data.user) throw AppError.badRequest('Falha ao convidar usuário.');
 
   await ensureSpecificProfile(data.user.id, input.role);
-
-  if (input.courseIds?.length && input.role !== 'admin') {
-    const table = input.role === 'professor' ? 'professor_courses' : 'promoter_courses';
-    const idColumn = input.role === 'professor' ? 'professor_id' : 'promoter_id';
-    const rows = input.courseIds.map((courseId) => ({ [idColumn]: data.user!.id, course_id: courseId }));
-    const { error: linkError } = await admin.from(table).upsert(rows);
-    if (linkError) throw AppError.badRequest(linkError.message);
-  }
+  await linkCourses(data.user.id, input.role, input.courseIds);
 
   const { data: profile } = await admin
     .from('profiles')
@@ -79,4 +95,43 @@ export async function inviteUser(req: Request, input: InviteUserInput) {
     .maybeSingle();
 
   return profile ?? { id: data.user.id, email: input.email, role: input.role, full_name: input.fullName };
+}
+
+export async function createUserWithPassword(req: Request, input: CreateUserInput) {
+  if (!req.user) throw AppError.unauthorized();
+
+  const admin = getAdminClient();
+  const { data, error } = await admin.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: {
+      tenant_id: req.user.tenantId,
+      role: input.role,
+      full_name: input.fullName,
+    },
+  });
+
+  if (error) throw AppError.badRequest(error.message);
+  if (!data.user) throw AppError.badRequest('Falha ao criar usuário.');
+
+  await admin.from('profiles').upsert({
+    id: data.user.id,
+    tenant_id: req.user.tenantId,
+    full_name: input.fullName,
+    email: input.email,
+    role: input.role,
+    is_active: true,
+  });
+
+  await ensureSpecificProfile(data.user.id, input.role);
+  await linkCourses(data.user.id, input.role, input.courseIds);
+
+  return {
+    id: data.user.id,
+    email: input.email,
+    role: input.role,
+    full_name: input.fullName,
+    status: 'active' as const,
+  };
 }

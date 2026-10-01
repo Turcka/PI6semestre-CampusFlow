@@ -109,7 +109,7 @@ export async function listPublicWindows(query: PublicWindows) {
   const candidate = await assertCandidateAccess(query.candidateId, query.portalToken);
   const admin = getAdminClient();
 
-  const { data: slots, error } = await admin
+  let slotsQuery = admin
     .from('visit_slots')
     .select('id, owner_id, campus_id, starts_at, ends_at, capacity, booked_count, owner_role')
     .eq('is_open', true)
@@ -117,6 +117,9 @@ export async function listPublicWindows(query: PublicWindows) {
     .gte('starts_at', query.from)
     .lte('starts_at', query.to)
     .order('starts_at');
+  if (candidate.campus_id) slotsQuery = slotsQuery.eq('campus_id', candidate.campus_id);
+
+  const { data: slots, error } = await slotsQuery;
   if (error) throw AppError.badRequest(error.message);
 
   const openSlots = (slots ?? []).filter((s) => s.booked_count < s.capacity);

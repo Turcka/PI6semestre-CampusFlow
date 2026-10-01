@@ -20,6 +20,7 @@
     "db:seed": "node scripts/db.mjs seed",
     "db:status": "node scripts/db.mjs status",
     "db:check": "node scripts/db-check.mjs",
+    "seed:users": "node scripts/seed-users.mjs",
     "db:reset": "node scripts/db.mjs reset --yes",
     "db:local:start": "supabase start",
     "db:local:stop": "supabase stop",

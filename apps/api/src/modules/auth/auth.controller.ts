@@ -11,3 +11,8 @@ export const invite = asyncHandler(async (req: Request, res: Response) => {
   const result = await authService.inviteUser(req, req.body);
   res.status(201).json(result);
 });
+
+export const createUser = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authService.createUserWithPassword(req, req.body);
+  res.status(201).json(result);
+});

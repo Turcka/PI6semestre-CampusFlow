@@ -113,6 +113,12 @@ export const inviteUserSchema = z.object({
 });
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 
+/** Criação direta com senha (útil em ambiente local / admin seed). */
+export const createUserSchema = inviteUserSchema.extend({
+  password: z.string().min(8).max(72),
+});
+export type CreateUserInput = z.infer<typeof createUserSchema>;
+
 export const chatbotAnswerSchema = z.object({
   questionId: uuidSchema,
   value: z.union([
