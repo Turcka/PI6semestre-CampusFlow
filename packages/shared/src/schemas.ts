@@ -15,23 +15,52 @@ export const phoneE164Schema = z
   .string()
   .regex(/^\+55\d{10,11}$/, 'Telefone deve estar no formato +55DDDNÚMERO');
 
-/** CPF com 11 dígitos e dígitos verificadores. */
+/**
+ * Em desenvolvimento / testes aceita qualquer CPF com 11 dígitos.
+ * Em produção exige dígitos verificadores, salvo RELAX_CPF_VALIDATION=true
+ * (ou VITE_RELAX_CPF_VALIDATION=true no frontend).
+ */
+export function isCpfValidationRelaxed(): boolean {
+  const nodeEnv = typeof process !== 'undefined' ? process.env : undefined;
+  if (nodeEnv?.RELAX_CPF_VALIDATION === 'true') return true;
+  if (nodeEnv?.RELAX_CPF_VALIDATION === 'false') return false;
+
+  try {
+    const metaEnv = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
+    if (metaEnv?.VITE_RELAX_CPF_VALIDATION === 'true') return true;
+    if (metaEnv?.VITE_RELAX_CPF_VALIDATION === 'false') return false;
+    if (metaEnv?.DEV === true || metaEnv?.MODE === 'development') return true;
+    if (metaEnv?.PROD === true || metaEnv?.MODE === 'production') return false;
+  } catch {
+    /* Node sem import.meta.env */
+  }
+
+  // Strict só quando NODE_ENV=production; undefined/test/development = relaxado.
+  return nodeEnv?.NODE_ENV !== 'production';
+}
+
+/** Algoritmo oficial dos dígitos verificadores do CPF. */
+export function isValidCpfChecksum(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, '');
+  if (!/^\d{11}$/.test(digits)) return false;
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  const calc = (base: string, factor: number) => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * (factor - i);
+    const mod = (sum * 10) % 11;
+    return mod === 10 ? 0 : mod;
+  };
+  const d1 = calc(digits.slice(0, 9), 10);
+  const d2 = calc(digits.slice(0, 10), 11);
+  return d1 === Number(digits[9]) && d2 === Number(digits[10]);
+}
+
+/** CPF com 11 dígitos; checksum obrigatório só em produção (salvo flag de teste). */
 export const cpfSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ''))
   .refine((v) => /^\d{11}$/.test(v), 'CPF deve ter 11 dígitos')
-  .refine((v) => {
-    if (/^(\d)\1{10}$/.test(v)) return false;
-    const calc = (base: string, factor: number) => {
-      let sum = 0;
-      for (let i = 0; i < base.length; i++) sum += Number(base[i]) * (factor - i);
-      const mod = (sum * 10) % 11;
-      return mod === 10 ? 0 : mod;
-    };
-    const d1 = calc(v.slice(0, 9), 10);
-    const d2 = calc(v.slice(0, 10), 11);
-    return d1 === Number(v[9]) && d2 === Number(v[10]);
-  }, 'CPF inválido');
+  .refine((v) => isCpfValidationRelaxed() || isValidCpfChecksum(v), 'CPF inválido');
 
 export const uuidSchema = z.string().uuid();
 

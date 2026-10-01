@@ -118,10 +118,15 @@ export function RegisterStep({ campusSlug, onRegistered }: Props) {
           <Input
             id="cpf"
             inputMode="numeric"
+            autoComplete="off"
+            placeholder="000.000.000-00"
             value={form.watch('cpf')}
             onChange={(e) => form.setValue('cpf', maskCpf(e.target.value), { shouldValidate: true })}
           />
           <FieldError>{form.formState.errors.cpf?.message}</FieldError>
+          {import.meta.env.DEV ? (
+            <p className="mt-1 text-xs text-slate-500">Modo teste: qualquer CPF com 11 dígitos é aceito.</p>
+          ) : null}
         </div>
         <div>
           <Label htmlFor="email">E-mail</Label>

@@ -92,6 +92,8 @@ Scripts úteis:
 
 Contas de demo (após `npm run seed:users`): `admin@campusflow.local`, `promotor@campusflow.local`, `professor@campusflow.local` — senha `CampusFlow123!`.
 
+Em desenvolvimento, o cadastro de candidato aceita qualquer CPF com 11 dígitos (sem validar dígitos verificadores). Em produção a validação completa volta; use `RELAX_CPF_VALIDATION=true` / `VITE_RELAX_CPF_VALIDATION=true` só se precisar forçar o modo teste.
+
 ## Roadmap
 
 1. **Fase 1 - Core Engine**: higienização de leads e motor de agendamento sem conflitos.
