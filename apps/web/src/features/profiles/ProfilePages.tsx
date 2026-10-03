@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Card, Input, Label, PageHeader, Spinner, Textarea } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { v1Api } from '@/lib/api';
+import { queryKeys } from '@/lib/query-keys';
 
 export function PromoterProfilePage() {
   const { me } = useAuth();
@@ -69,26 +70,50 @@ export function PromoterProfilePage() {
 }
 
 export function ProfessorProfilePage() {
-  const [area, setArea] = useState('');
+  const { me, refresh } = useAuth();
+  const [courseIds, setCourseIds] = useState<string[]>([]);
   const [topics, setTopics] = useState('');
   const [acceptsVisits, setAcceptsVisits] = useState(true);
   const [isSubstitute, setIsSubstitute] = useState(false);
 
+  const coursesQuery = useQuery({
+    queryKey: queryKeys.courses(),
+    queryFn: () => v1Api<Array<{ id: string; name: string }>>('/courses'),
+  });
+
+  useEffect(() => {
+    setCourseIds(me?.courseIds ?? []);
+  }, [me?.courseIds]);
+
+  const courses = coursesQuery.data ?? [];
+
+  function toggleCourse(id: string) {
+    setCourseIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
   const saveMutation = useMutation({
-    mutationFn: () =>
-      v1Api('/professors/me/profile', {
+    mutationFn: () => {
+      const selected = courses.filter((course) => courseIds.includes(course.id));
+      return v1Api('/professors/me/profile', {
         method: 'PUT',
         body: JSON.stringify({
-          area,
+          area: selected.map((course) => course.name).join(', ') || null,
+          courseIds,
           topics: topics
             .split(',')
-            .map((t) => t.trim())
+            .map((item) => item.trim())
             .filter(Boolean),
           acceptsVisits,
           isSubstitute,
         }),
-      }),
+      });
+    },
+    onSuccess: () => {
+      void refresh();
+    },
   });
+
+  if (coursesQuery.isLoading) return <Spinner />;
 
   return (
     <div className="space-y-4">
@@ -96,7 +121,24 @@ export function ProfessorProfilePage() {
       <Card className="space-y-3">
         <div>
           <Label>Área</Label>
-          <Input value={area} onChange={(e) => setArea(e.target.value)} placeholder="Ex.: Engenharia de Computação" />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {courses.map((course) => {
+              const active = courseIds.includes(course.id);
+              return (
+                <button
+                  key={course.id}
+                  type="button"
+                  onClick={() => toggleCourse(course.id)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                    active ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {course.name}
+                </button>
+              );
+            })}
+            {!courses.length ? <p className="text-sm text-slate-500">Nenhum curso cadastrado.</p> : null}
+          </div>
         </div>
         <div>
           <Label>Temas (separados por vírgula)</Label>
@@ -110,10 +152,11 @@ export function ProfessorProfilePage() {
           <input type="checkbox" checked={isSubstitute} onChange={(e) => setIsSubstitute(e.target.checked)} />
           Pode atuar como substituto
         </label>
-        <Button disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+        <Button disabled={saveMutation.isPending || !courseIds.length} onClick={() => saveMutation.mutate()}>
           Salvar
         </Button>
         {saveMutation.isSuccess ? <p className="text-sm text-emerald-700">Perfil atualizado.</p> : null}
+        {saveMutation.isError ? <p className="text-sm text-rose-600">{(saveMutation.error as Error).message}</p> : null}
       </Card>
     </div>
   );

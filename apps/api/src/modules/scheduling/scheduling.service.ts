@@ -123,7 +123,19 @@ export async function listPublicWindows(query: PublicWindows) {
   if (error) throw AppError.badRequest(error.message);
 
   const openSlots = (slots ?? []).filter((s) => s.booked_count < s.capacity);
-  const ownerIds = [...new Set(openSlots.map((slot) => slot.owner_id))];
+  let eligibleOwnerIds: Set<string> | null = null;
+  if (candidate.course_id) {
+    const { data: links, error: linkError } = await admin
+      .from('promoter_courses')
+      .select('promoter_id')
+      .eq('course_id', candidate.course_id);
+    if (linkError) throw AppError.badRequest(linkError.message);
+    eligibleOwnerIds = new Set((links ?? []).map((link) => link.promoter_id));
+  }
+  const bookableSlots = eligibleOwnerIds
+    ? openSlots.filter((slot) => eligibleOwnerIds.has(slot.owner_id))
+    : openSlots;
+  const ownerIds = [...new Set(bookableSlots.map((slot) => slot.owner_id))];
   const { data: owners } = ownerIds.length
     ? await admin.from('profiles').select('id, full_name').in('id', ownerIds)
     : { data: [] as Array<{ id: string; full_name: string }> };
@@ -168,8 +180,8 @@ export async function listPublicWindows(query: PublicWindows) {
     return { id: match.owner_id, name: professorName.get(match.owner_id) ?? 'Professor' };
   };
 
-  const byDay = new Map<string, typeof openSlots>();
-  for (const slot of openSlots) {
+  const byDay = new Map<string, typeof bookableSlots>();
+  for (const slot of bookableSlots) {
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(slot.starts_at));
     const list = byDay.get(day) ?? [];
     list.push(slot);

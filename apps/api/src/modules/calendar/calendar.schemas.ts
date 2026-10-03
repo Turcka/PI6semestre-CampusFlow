@@ -2,8 +2,8 @@ import { VISIT_STATUSES, uuidSchema } from '@campusflow/shared';
 import { z } from 'zod';
 
 export const listEventsQuerySchema = z.object({
-  from: z.string().datetime(),
-  to: z.string().datetime(),
+  from: z.string().datetime({ offset: true }),
+  to: z.string().datetime({ offset: true }),
   view: z.enum(['day', 'week', 'month']).optional(),
   courseId: uuidSchema.optional(),
   promoterId: uuidSchema.optional(),

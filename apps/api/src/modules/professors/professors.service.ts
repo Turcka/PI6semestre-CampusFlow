@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { getAdminClient } from '../../config/supabase.js';
 import { AppError } from '../../utils/app-error.js';
 import type { professorRequirementRuleSchema, updateProfessorProfileSchema } from './professors.schemas.js';
 
@@ -16,14 +17,31 @@ export async function updateMyProfile(req: Request, input: UpdateProfile) {
   const { user, supabase } = requireUser(req);
   if (user.role !== 'professor') throw AppError.forbidden();
 
-  const patch: Record<string, unknown> = { profile_id: user.id };
+  const patch: Record<string, unknown> = {};
   if (input.area !== undefined) patch.area = input.area;
   if (input.topics !== undefined) patch.topics = input.topics;
   if (input.acceptsVisits !== undefined) patch.accepts_visits = input.acceptsVisits;
   if (input.isSubstitute !== undefined) patch.is_substitute = input.isSubstitute;
 
-  const { data, error } = await supabase.from('professor_profiles').upsert(patch).select().single();
-  if (error) throw AppError.badRequest(error.message);
+  const { data: updated, error: updateError } = await supabase
+    .from('professor_profiles')
+    .update(patch)
+    .eq('profile_id', user.id)
+    .select()
+    .maybeSingle();
+  if (updateError) throw AppError.badRequest(updateError.message);
+
+  let data = updated;
+  if (!data) {
+    const admin = getAdminClient();
+    const { data: created, error: insertError } = await admin
+      .from('professor_profiles')
+      .insert({ profile_id: user.id, ...patch })
+      .select()
+      .single();
+    if (insertError) throw AppError.badRequest(insertError.message);
+    data = created;
+  }
 
   if (input.courseIds) {
     await supabase.from('professor_courses').delete().eq('professor_id', user.id);

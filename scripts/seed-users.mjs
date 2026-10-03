@@ -92,20 +92,26 @@ async function ensureUser(spec) {
   if (profileError) throw profileError;
 
   if (spec.role === 'promotor') {
-    const { error } = await admin.from('promoter_profiles').upsert({
+    await admin.from('promoter_profiles').upsert({
       profile_id: user.id,
-      bio: 'Promotor de demonstração — Engenharia e tecnologia.',
-      preferred_focus: ['tecnico'],
+      bio: 'Promotor de demonstração — atende todos os cursos do campus.',
+      preferred_focus: ['tecnico', 'academico', 'profissional', 'institucional'],
       experience_level: 4,
       max_visits_per_day: 6,
       accepts_auto_match: true,
     });
-    if (error) throw error;
+
+    const { data: courses, error: coursesError } = await admin
+      .from('courses')
+      .select('id')
+      .eq('tenant_id', TENANT_ID);
+    if (coursesError) throw coursesError;
+    const courseIds = (courses ?? []).map((course) => course.id);
 
     await admin.from('promoter_courses').delete().eq('promoter_id', user.id);
-    if (spec.courseIds?.length) {
+    if (courseIds.length) {
       const { error: courseError } = await admin.from('promoter_courses').insert(
-        spec.courseIds.map((courseId) => ({
+        courseIds.map((courseId) => ({
           promoter_id: user.id,
           course_id: courseId,
           familiarity: 5,
@@ -169,9 +175,15 @@ async function ensureUser(spec) {
     });
     if (error) throw error;
     await admin.from('professor_courses').delete().eq('professor_id', user.id);
-    if (spec.courseIds?.length) {
+    const { data: courses, error: coursesError } = await admin
+      .from('courses')
+      .select('id')
+      .eq('tenant_id', TENANT_ID);
+    if (coursesError) throw coursesError;
+    const courseIds = (courses ?? []).map((course) => course.id);
+    if (courseIds.length) {
       const { error: courseError } = await admin.from('professor_courses').insert(
-        spec.courseIds.map((courseId) => ({ professor_id: user.id, course_id: courseId, is_primary: true })),
+        courseIds.map((courseId) => ({ professor_id: user.id, course_id: courseId, is_primary: true })),
       );
       if (courseError) throw courseError;
     }

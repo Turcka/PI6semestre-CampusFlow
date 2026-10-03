@@ -35,7 +35,27 @@ export async function listEvents(req: Request, query: ListEvents) {
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
 
-  return (data ?? [])
+  const rows = data ?? [];
+  const profileIds = new Set<string>();
+  for (const event of rows) {
+    if (event.promoter_id) profileIds.add(event.promoter_id);
+    if (event.professor_id) profileIds.add(event.professor_id);
+    const visit = event.visits as { promoter_id?: string | null; professor_id?: string | null } | null;
+    if (visit?.promoter_id) profileIds.add(visit.promoter_id);
+    if (visit?.professor_id) profileIds.add(visit.professor_id);
+  }
+
+  const names = new Map<string, string>();
+  if (profileIds.size) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', [...profileIds]);
+    if (profilesError) throw AppError.badRequest(profilesError.message);
+    for (const profile of profiles ?? []) names.set(profile.id, profile.full_name);
+  }
+
+  return rows
     .filter((event) => {
       const visit = event.visits as {
         status?: string;
@@ -53,9 +73,13 @@ export async function listEvents(req: Request, query: ListEvents) {
       return true;
     })
     .map((event) => {
-      const visit = event.visits as { status?: string } | null;
+      const visit = event.visits as { status?: string; promoter_id?: string | null; professor_id?: string | null } | null;
+      const promoterId = event.promoter_id ?? visit?.promoter_id ?? null;
+      const professorId = event.professor_id ?? visit?.professor_id ?? null;
       return {
         ...event,
+        promoterName: promoterId ? (names.get(promoterId) ?? null) : null,
+        professorName: professorId ? (names.get(professorId) ?? null) : null,
         pendingApproval: visit?.status === 'aguardando_promotor' || visit?.status === 'aguardando_professor',
         hasConflict: false,
       };
