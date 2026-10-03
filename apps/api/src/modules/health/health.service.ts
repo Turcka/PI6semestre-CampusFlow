@@ -1,11 +1,15 @@
 import { getAdminClient } from '../../config/supabase.js';
 import { AppError } from '../../utils/app-error.js';
 
+/** Muda a cada processo da API. O portal usa isso para esquecer o candidato após um restart. */
+export const apiStartedAt = new Date().toISOString();
+
 export async function checkLiveness() {
   return {
     status: 'ok' as const,
     service: 'campusflow-api',
     timestamp: new Date().toISOString(),
+    startedAt: apiStartedAt,
     uptime: process.uptime(),
   };
 }

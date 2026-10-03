@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { getAdminClient } from '../../config/supabase.js';
 import { AppError } from '../../utils/app-error.js';
 import { domainEvents } from '../../utils/events.js';
 import { mapRpcError } from '../../utils/map-rpc-error.js';
@@ -82,22 +83,28 @@ export async function getVisit(req: Request, visitId: string) {
     .from('visits')
     .select(
       `*,
-      candidates(*, candidate_interests(*, interest_categories(*))),
-      visit_invitations(*),
-      visit_reassignments(*),
-      visit_status_history(*),
-      visit_notes(*),
-      visit_itinerary_items(*, pois(*)),
-      match_runs(*, match_results(*)),
-      message_logs(id, channel, status, sent_at)`,
+      candidates(id, full_name, email, phone, profile_summary, preferred_focus, course_id),
+      visit_invitations(id, status, role, profile_id, expires_at),
+      visit_itinerary_items(id, order_index, reason)`,
     )
     .eq('id', visitId)
     .eq('tenant_id', user.tenantId)
-    .single();
-  if (error || !data) throw AppError.notFound('Visita não encontrada.');
+    .maybeSingle();
+  if (error) throw AppError.badRequest(error.message);
+  if (!data) throw AppError.notFound('Visita não encontrada.');
   if (user.role === 'promotor' && data.promoter_id !== user.id) throw AppError.forbidden();
   if (user.role === 'professor' && data.professor_id !== user.id) throw AppError.forbidden();
-  return data;
+
+  if (data.match_run_id) {
+    const { data: matchRun } = await supabase
+      .from('match_runs')
+      .select('id, status, match_results(promoter_id, score, justification, is_selected, rank)')
+      .eq('id', data.match_run_id)
+      .maybeSingle();
+    return { ...data, match_runs: matchRun };
+  }
+
+  return { ...data, match_runs: null };
 }
 
 export async function setVisitStatus(req: Request, visitId: string, input: SetStatus) {
@@ -206,6 +213,21 @@ export async function assignVisit(req: Request, visitId: string, input: Assign) 
   }
 
   return promoterAssign;
+}
+
+/** Admin atribui a equipe e confirma a visita, encerrando a pendência. */
+export async function resolvePending(req: Request, visitId: string, input: Assign) {
+  await assignVisit(req, visitId, input);
+  await setVisitStatus(req, visitId, { status: 'confirmada', reason: 'Pendência resolvida pelo administrador' });
+
+  const admin = getAdminClient();
+  await admin
+    .from('visit_invitations')
+    .update({ status: 'accepted', responded_at: new Date().toISOString() })
+    .eq('visit_id', visitId)
+    .eq('status', 'pending');
+
+  return getVisit(req, visitId);
 }
 
 export async function cancelVisit(req: Request, visitId: string, input: Cancel) {

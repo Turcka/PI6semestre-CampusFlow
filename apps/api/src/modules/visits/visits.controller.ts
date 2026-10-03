@@ -35,6 +35,10 @@ export const assign = asyncHandler(async (req: Request, res: Response) => {
   res.json(await visitsService.assignVisit(req, req.params.id!, req.body));
 });
 
+export const resolve = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await visitsService.resolvePending(req, req.params.id!, req.body));
+});
+
 export const cancel = asyncHandler(async (req: Request, res: Response) => {
   res.json(await visitsService.cancelVisit(req, req.params.id!, req.body));
 });

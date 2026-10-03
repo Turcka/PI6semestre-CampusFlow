@@ -43,6 +43,12 @@ visitsRouter.post(
   visitsController.assign,
 );
 visitsRouter.post(
+  '/:id/resolve',
+  adminOnly,
+  validate({ params: visitIdParamsSchema, body: assignVisitSchema }),
+  visitsController.resolve,
+);
+visitsRouter.post(
   '/:id/cancel',
   adminOnly,
   validate({ params: visitIdParamsSchema, body: cancelVisitSchema }),

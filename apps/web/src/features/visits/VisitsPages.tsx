@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { Badge, Button, Card, EmptyState, PageHeader, ScoreBar, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { v1Api } from '@/lib/api';
+import { ApiError, v1Api } from '@/lib/api';
 import { formatDateTime, parseTstzrange } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -211,6 +211,10 @@ export function VisitDetailPage({ visitId }: { visitId: string }) {
   });
 
   if (detailQuery.isLoading) return <Spinner />;
+  if (detailQuery.isError) {
+    const message = detailQuery.error instanceof ApiError ? detailQuery.error.message : 'Visita não encontrada.';
+    return <p className="text-rose-600">{message}</p>;
+  }
   if (!detailQuery.data) return <p className="text-rose-600">Visita não encontrada.</p>;
 
   const visit = detailQuery.data;

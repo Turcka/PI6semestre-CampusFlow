@@ -7,6 +7,7 @@ import { publicRateLimit } from '../middlewares/rate-limit.middleware.js';
 import { validate } from '../middlewares/validate.middleware.js';
 import { publicCandidatesRouter } from '../modules/candidates/candidates.routes.js';
 import { publicChatbotRouter } from '../modules/chatbot/chatbot.routes.js';
+import { apiStartedAt } from '../modules/health/health.service.js';
 import { publicMapRouter } from '../modules/map/map.routes.js';
 import { publicSchedulingRouter } from '../modules/scheduling/scheduling.routes.js';
 import { AppError } from '../utils/app-error.js';
@@ -15,6 +16,10 @@ import { asyncHandler } from '../utils/async-handler.js';
 export const publicRouter = Router();
 
 publicRouter.use(publicRateLimit);
+
+publicRouter.get('/boot', (_req, res) => {
+  res.json({ startedAt: apiStartedAt });
+});
 
 publicRouter.use('/candidates', publicCandidatesRouter);
 publicRouter.use('/leads', publicCandidatesRouter);

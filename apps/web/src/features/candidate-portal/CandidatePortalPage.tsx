@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Badge, Button, Card, EmptyState, FieldError, Input, Label, Spinner } from '@/components/ui';
 import { ApiError, publicApi } from '@/lib/api';
-import { getPortalToken, saveCandidateSession, setPortalToken } from '@/lib/candidate-token';
+import { saveCandidateSession, setPortalToken } from '@/lib/candidate-token';
 import { formatDateTime, parseTstzrange } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -43,14 +43,38 @@ const allowEmailLookup = import.meta.env.DEV || import.meta.env.VITE_ALLOW_PORTA
 
 export function CandidatePortalPage() {
   const [params, setParams] = useSearchParams();
-  const tokenFromUrl = params.get('token');
-  const stored = getPortalToken();
   const [emailInput, setEmailInput] = useState('');
-  const [tokenInput, setTokenInput] = useState(tokenFromUrl ?? stored ?? '');
+  const [tokenInput, setTokenInput] = useState('');
   const [accessError, setAccessError] = useState<string | null>(null);
-  const token = tokenFromUrl ?? stored;
+  const [token, setToken] = useState<string | null>(null);
+  const bootSeen = useRef<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const bootQuery = useQuery({
+    queryKey: ['public', 'boot'],
+    queryFn: () => publicApi<{ startedAt: string }>('/boot'),
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    setPortalToken('');
+    if (params.get('token')) setParams({}, { replace: true });
+    // Só na abertura da página: não restaurar o candidato da visita anterior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const startedAt = bootQuery.data?.startedAt;
+    if (!startedAt) return;
+    if (bootSeen.current && bootSeen.current !== startedAt) {
+      setToken(null);
+      setTokenInput('');
+      setAccessError(null);
+    }
+    bootSeen.current = startedAt;
+  }, [bootQuery.data?.startedAt]);
 
   const meQuery = useQuery({
     queryKey: queryKeys.candidateMe(token ?? ''),
@@ -72,8 +96,7 @@ export function CandidatePortalPage() {
       }),
     onSuccess: (data) => {
       setAccessError(null);
-      setPortalToken(data.portalToken);
-      setParams({ token: data.portalToken });
+      setToken(data.portalToken);
     },
     onError: (err) => {
       setAccessError(err instanceof ApiError ? err.message : 'Não foi possível localizar a visita.');
@@ -141,8 +164,8 @@ export function CandidatePortalPage() {
             <Button
               variant="secondary"
               onClick={() => {
-                setPortalToken(tokenInput.trim());
-                setParams({ token: tokenInput.trim() });
+                const next = tokenInput.trim();
+                if (next) setToken(next);
               }}
             >
               Acessar com token
@@ -165,10 +188,11 @@ export function CandidatePortalPage() {
         title="Não encontramos sua visita"
         description="O e-mail ou token pode estar inválido. Tente novamente ou inicie um novo agendamento."
         action={
-          <Button
+            <Button
             onClick={() => {
+              setToken(null);
+              setTokenInput('');
               setPortalToken('');
-              setParams({});
             }}
           >
             Tentar de novo
