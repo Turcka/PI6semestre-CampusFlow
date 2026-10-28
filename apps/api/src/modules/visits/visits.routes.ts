@@ -10,6 +10,7 @@ import {
   createVisitNoteSchema,
   listVisitsQuerySchema,
   rescheduleVisitSchema,
+  setPresenceSchema,
   setVisitStatusSchema,
   visitIdParamsSchema,
 } from './visits.schemas.js';
@@ -27,6 +28,12 @@ visitsRouter.patch(
   adminOrPromotor,
   validate({ params: visitIdParamsSchema, body: setVisitStatusSchema }),
   visitsController.setStatus,
+);
+visitsRouter.post(
+  '/:id/presence',
+  adminOnly,
+  validate({ params: visitIdParamsSchema, body: setPresenceSchema }),
+  visitsController.setPresence,
 );
 visitsRouter.post(
   '/:id/notes',

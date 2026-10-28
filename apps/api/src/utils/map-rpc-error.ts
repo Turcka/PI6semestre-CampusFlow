@@ -56,6 +56,33 @@ export function mapRpcError(err: { message?: string; code?: string; details?: st
   if (message.includes('VISIT_NOT_CHECKABLE')) {
     throw AppError.conflict('VISIT_NOT_CHECKABLE', 'Visita não pode fazer check-in neste status.');
   }
+  if (message.includes('PROFILE_NOT_ASSIGNABLE')) {
+    throw AppError.conflict('PROFILE_NOT_ASSIGNABLE', 'Este usuário está inativo ou banido e não pode ser escalado.');
+  }
+  if (message.includes('PROMOTER_NOT_ELIGIBLE')) {
+    throw AppError.conflict(
+      'PROMOTER_NOT_ELIGIBLE',
+      'Promotor não está apto: verifique idade (18+), foto de perfil, onboarding concluído e teste comportamental válido.',
+    );
+  }
+  if (message.includes('PROMOTER_DAILY_LIMIT')) {
+    throw AppError.conflict('PROMOTER_DAILY_LIMIT', 'Este promotor já atingiu o limite de visitas para o dia.');
+  }
+  if (message.includes('PROMOTER_UNDERAGE')) {
+    throw new AppError(422, 'PROMOTER_UNDERAGE', 'Promotores precisam ter 18 anos ou mais.');
+  }
+  if (message.includes('PROFILE_NOT_FOUND')) {
+    throw AppError.notFound('Usuário não encontrado.');
+  }
+  if (message.includes('CANNOT_BAN_SELF') || message.includes('CANNOT_REMOVE_SELF')) {
+    throw AppError.conflict('CANNOT_MODERATE_SELF', 'Você não pode banir ou remover a si mesmo.');
+  }
+  if (message.includes('LAST_ADMIN')) {
+    throw AppError.conflict('LAST_ADMIN', 'Não é possível banir ou remover o último administrador ativo.');
+  }
+  if (message.includes('SESSION_NOT_PROMOTER') || message.includes('SESSION_NOT_FOUND')) {
+    throw AppError.notFound('Sessão de questionário não encontrada.');
+  }
   if (code === '23P01' || message.includes('exclusion') || message.includes('no_overlap')) {
     throw AppError.conflict('PARTICIPANT_BUSY', 'Participante já possui compromisso neste horário.');
   }

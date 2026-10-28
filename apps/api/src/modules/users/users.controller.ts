@@ -10,3 +10,15 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
 export const patch = asyncHandler(async (req: Request, res: Response) => {
   res.json(await usersService.updateUser(req, req.params.id!, req.body));
 });
+
+export const ban = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await usersService.banUser(req, req.params.id!, req.body));
+});
+
+export const unban = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await usersService.unbanUser(req, req.params.id!));
+});
+
+export const remove = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await usersService.removeUser(req, req.params.id!));
+});

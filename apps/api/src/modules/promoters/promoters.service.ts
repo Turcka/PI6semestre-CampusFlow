@@ -2,11 +2,14 @@ import type { Request } from 'express';
 import type { z } from 'zod';
 
 import { AppError } from '../../utils/app-error.js';
+import { loadPromoterEligibility } from '../users/users.service.js';
 import type {
   listMyVisitsQuerySchema,
   listPromotersQuerySchema,
   updatePromoterProfileSchema,
 } from './promoters.schemas.js';
+
+const PROMOTER_PROFILE_COLUMNS = 'id, full_name, email, phone, avatar_url, birth_date, is_active, is_banned';
 
 type UpdateProfile = z.infer<typeof updatePromoterProfileSchema>;
 type ListQuery = z.infer<typeof listPromotersQuerySchema>;
@@ -21,14 +24,21 @@ export async function listPromoters(req: Request, query: ListQuery) {
   const { user, supabase } = requireUser(req);
   let q = supabase
     .from('profiles')
-    .select('id, full_name, email, is_active, promoter_profiles(*)')
+    .select(`${PROMOTER_PROFILE_COLUMNS}, promoter_profiles(*)`)
     .eq('tenant_id', user.tenantId)
     .eq('role', 'promotor')
     .order('full_name');
   if (query.q) q = q.or(`full_name.ilike.%${query.q}%,email.ilike.%${query.q}%`);
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
-  return data ?? [];
+
+  const rows = data ?? [];
+  const eligibility = await loadPromoterEligibility(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...row,
+    eligible: eligibility.get(row.id)?.eligible ?? false,
+    eligibilityMissing: eligibility.get(row.id)?.missing ?? ['onboarding'],
+  }));
 }
 
 export async function getPromoter(req: Request, promoterId: string) {
@@ -38,14 +48,20 @@ export async function getPromoter(req: Request, promoterId: string) {
   const { data, error } = await supabase
     .from('profiles')
     .select(
-      'id, full_name, email, is_active, promoter_profiles(*, promoter_interests(*, interest_categories(*)), promoter_pois(poi_id), promoter_courses(course_id, familiarity))',
+      `${PROMOTER_PROFILE_COLUMNS}, promoter_profiles(*, promoter_interests(*, interest_categories(*)), promoter_pois(poi_id), promoter_courses(course_id, familiarity))`,
     )
     .eq('id', promoterId)
     .eq('tenant_id', user.tenantId)
     .eq('role', 'promotor')
     .single();
   if (error || !data) throw AppError.notFound('Promotor não encontrado.');
-  return data;
+
+  const eligibility = await loadPromoterEligibility([promoterId]);
+  return {
+    ...data,
+    eligible: eligibility.get(promoterId)?.eligible ?? false,
+    eligibilityMissing: eligibility.get(promoterId)?.missing ?? ['onboarding'],
+  };
 }
 
 export async function updateMyProfile(req: Request, input: UpdateProfile) {

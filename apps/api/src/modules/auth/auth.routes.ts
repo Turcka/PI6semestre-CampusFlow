@@ -1,4 +1,4 @@
-﻿import { createUserSchema, inviteUserSchema } from '@campusflow/shared';
+﻿import { createUserSchema, inviteUserSchema, updateMeSchema } from '@campusflow/shared';
 import { Router } from 'express';
 
 import { requireRole } from '../../middlewares/role.middleware.js';
@@ -8,5 +8,6 @@ import * as authController from './auth.controller.js';
 export const authRouter = Router();
 
 authRouter.get('/me', authController.getMe);
+authRouter.patch('/me', validate({ body: updateMeSchema }), authController.updateMe);
 authRouter.post('/invite', requireRole('admin'), validate({ body: inviteUserSchema }), authController.invite);
 authRouter.post('/users', requireRole('admin'), validate({ body: createUserSchema }), authController.createUser);

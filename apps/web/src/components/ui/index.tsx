@@ -1,5 +1,8 @@
 import type { VisitStatus } from '@campusflow/shared';
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+export { Drawer } from './Drawer';
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -91,9 +94,13 @@ export function FieldError({ children }: { children?: ReactNode }) {
   return <p className="mt-1 text-sm text-rose-600">{children}</p>;
 }
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('rounded-2xl border border-slate-200 bg-white p-5 shadow-sm', className)}>{children}</div>;
-}
+export const Card = forwardRef<HTMLDivElement, { children: ReactNode; className?: string }>(function Card({ children, className }, ref) {
+  return (
+    <div ref={ref} className={cx('rounded-2xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
+      {children}
+    </div>
+  );
+});
 
 export function Badge({ status, children }: { status?: VisitStatus | string; children?: ReactNode }) {
   const map: Record<string, string> = {
@@ -178,14 +185,56 @@ export function Stepper({ steps, current }: { steps: string[]; current: number }
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
+/**
+ * Botão "Voltar": usa o histórico quando há página anterior nesta aba;
+ * caso contrário navega para `fallback` (útil quando a tela foi aberta direto pela URL).
+ */
+export function BackButton({ fallback, label = 'Voltar', className }: { fallback: string; label?: string; className?: string }) {
+  const navigate = useNavigate();
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
-        {description ? <p className="mt-1 text-sm text-slate-600">{description}</p> : null}
+    <button
+      type="button"
+      aria-label={label}
+      onClick={() => {
+        const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+        if (idx > 0) navigate(-1);
+        else navigate(fallback);
+      }}
+      className={cx(
+        'inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500',
+        className,
+      )}
+    >
+      <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M12 4l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {label}
+    </button>
+  );
+}
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+  backTo,
+}: {
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  /** Quando informado, exibe o botão Voltar acima do título com este destino de fallback. */
+  backTo?: string;
+}) {
+  return (
+    <div className="mb-6 space-y-2">
+      {backTo ? <BackButton fallback={backTo} className="-ml-2" /> : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
+          {description ? <p className="mt-1 text-sm text-slate-600">{description}</p> : null}
+        </div>
+        {actions}
       </div>
-      {actions}
     </div>
   );
 }

@@ -23,7 +23,15 @@ type ListQuestionsQuery = z.infer<typeof listQuestionsQuerySchema>;
 type CategoryInput = z.infer<typeof interestCategorySchema>;
 type CategoryPatch = z.infer<typeof updateInterestCategorySchema>;
 
-type SessionRow = { id: string; tenant_id: string; candidate_id: string | null; audience: string; status: string };
+export type SessionAudience = 'candidato' | 'promotor';
+export type SessionRow = {
+  id: string;
+  tenant_id: string;
+  candidate_id: string | null;
+  profile_id: string | null;
+  audience: SessionAudience;
+  status: string;
+};
 type QuestionRow = ProfileQuestion & { order_index: number; is_required: boolean; is_active: boolean };
 
 function requireUser(req: Request) {
@@ -31,44 +39,60 @@ function requireUser(req: Request) {
   return { user: req.user, supabase: req.supabase };
 }
 
-async function getSession(sessionId: string) {
+/**
+ * Carrega a sessão. Quando `expected` é informado, garante a audiência (e, para promotor,
+ * que a sessão pertence ao `ownerProfileId`) — evita que um promotor responda a sessão de outro.
+ */
+export async function getSession(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('chatbot_sessions')
-    .select('id, tenant_id, candidate_id, audience, status')
+    .select('id, tenant_id, candidate_id, profile_id, audience, status')
     .eq('id', sessionId)
     .maybeSingle();
   if (error) throw AppError.badRequest(error.message);
   if (!data) throw AppError.notFound('Sessão do chatbot não encontrada.');
-  return data as SessionRow;
+  const session = data as SessionRow;
+  if (expected && session.audience !== expected.audience) {
+    throw AppError.notFound('Sessão do chatbot não encontrada.');
+  }
+  if (expected?.ownerProfileId && session.profile_id !== expected.ownerProfileId) {
+    throw AppError.forbidden('Esta sessão pertence a outro usuário.');
+  }
+  return session;
 }
 
 async function getSessionQuestions(session: SessionRow) {
   const admin = getAdminClient();
-  const { data: candidate, error: candidateError } = await admin
-    .from('candidates')
-    .select('course_id')
-    .eq('id', session.candidate_id)
-    .maybeSingle();
-  if (candidateError) throw AppError.badRequest(candidateError.message);
+
+  let courseId: string | null = null;
+  if (session.audience === 'candidato' && session.candidate_id) {
+    const { data: candidate, error: candidateError } = await admin
+      .from('candidates')
+      .select('course_id')
+      .eq('id', session.candidate_id)
+      .maybeSingle();
+    if (candidateError) throw AppError.badRequest(candidateError.message);
+    courseId = candidate?.course_id ?? null;
+  }
 
   let q = admin
     .from('chatbot_questions')
     .select('id, key, prompt, kind, options, order_index, is_required, is_active')
     .eq('tenant_id', session.tenant_id)
-    .eq('audience', 'candidato')
+    .eq('audience', session.audience)
     .eq('is_active', true)
     .order('order_index');
-  q = candidate?.course_id ? q.or(`course_id.is.null,course_id.eq.${candidate.course_id}`) : q.is('course_id', null);
+  q = courseId ? q.or(`course_id.is.null,course_id.eq.${courseId}`) : q.is('course_id', null);
 
   const { data, error } = await q;
   if (error) throw AppError.badRequest(error.message);
   return ((data ?? []) as QuestionRow[]).filter((question) => question.key !== 'disponibilidade');
 }
 
-export async function getNextQuestion(sessionId: string) {
+export async function getNextQuestion(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
   const admin = getAdminClient();
-  const session = await getSession(sessionId);
+  const session = await getSession(sessionId, expected);
   if (session.status === 'completed') return { question: null, progress: 1, isLast: true };
 
   const [questions, answersResult] = await Promise.all([
@@ -87,9 +111,13 @@ export async function getNextQuestion(sessionId: string) {
   };
 }
 
-export async function saveAnswer(sessionId: string, input: AnswerInput) {
+export async function saveAnswer(
+  sessionId: string,
+  input: AnswerInput,
+  expected?: { audience: SessionAudience; ownerProfileId?: string },
+) {
   const admin = getAdminClient();
-  const session = await getSession(sessionId);
+  const session = await getSession(sessionId, expected);
   if (session.status === 'completed') throw AppError.conflict('SESSION_COMPLETED', 'Sessão do chatbot já foi concluída.');
 
   const questions = await getSessionQuestions(session);
@@ -106,9 +134,9 @@ export async function saveAnswer(sessionId: string, input: AnswerInput) {
   return data;
 }
 
-export async function reviewSession(sessionId: string) {
+export async function reviewSession(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
   const admin = getAdminClient();
-  const session = await getSession(sessionId);
+  const session = await getSession(sessionId, expected);
   const { data, error } = await admin
     .from('chatbot_answers')
     .select('*, chatbot_questions(id, key, prompt, kind, options, order_index)')
@@ -127,6 +155,7 @@ export async function reviewSession(sessionId: string) {
 
 export async function completeSession(sessionId: string) {
   const admin = getAdminClient();
+  await getSession(sessionId, { audience: 'candidato' });
   const { data, error } = await admin.rpc('build_candidate_profile', { p_session_id: sessionId });
   if (error) mapRpcError(error);
 

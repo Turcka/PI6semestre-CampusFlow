@@ -17,7 +17,9 @@ export type AuthMe = {
     phone: string | null;
     role: UserRole;
     avatar_url: string | null;
+    birth_date: string | null;
     is_active: boolean;
+    is_banned?: boolean;
   };
   tenant: {
     id: string;
@@ -28,6 +30,25 @@ export type AuthMe = {
   } | null;
   campuses: Array<{ id: string; name: string; slug: string }>;
   courseIds: string[];
+  /** Presente só para promotores: estado das travas (18+, foto, onboarding, teste válido). */
+  onboarding: {
+    completed: boolean;
+    missing: string[];
+    completedAt: string | null;
+    testExpiresAt: string | null;
+    sessionId: string | null;
+  } | null;
+};
+
+export const ONBOARDING_LABELS: Record<string, string> = {
+  inactive: 'Conta inativa',
+  banned: 'Conta suspensa',
+  birth_date: 'Informar data de nascimento',
+  underage: 'Ter 18 anos ou mais',
+  avatar: 'Enviar foto de perfil',
+  onboarding: 'Concluir o questionário de onboarding',
+  behavioral_test: 'Fazer o teste comportamental',
+  behavioral_test_expired: 'Refazer o teste comportamental (venceu)',
 };
 
 type AuthContextValue = {
@@ -117,5 +138,28 @@ export function RequireRole({ roles, children }: { roles: UserRole[]; children: 
   }
   if (!me) return <Navigate to="/login" replace />;
   if (!roles.includes(me.profile.role)) return <Navigate to={homeForRole(me.profile.role)} replace />;
+  return children;
+}
+
+/**
+ * Promotor sem onboarding completo (ou com teste vencido) é levado para /app/onboarding.
+ * Outros papéis passam direto.
+ */
+export function RequirePromoterOnboarding({ children }: { children: ReactNode }) {
+  const { me, loading } = useAuth();
+  const location = useLocation();
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+  if (!me) return <Navigate to="/login" replace />;
+  const isPromoter = me.profile.role === 'promotor';
+  const needsOnboarding = isPromoter && me.onboarding && !me.onboarding.completed;
+  if (needsOnboarding && !location.pathname.startsWith('/app/onboarding')) {
+    return <Navigate to="/app/onboarding" replace state={{ from: location.pathname }} />;
+  }
   return children;
 }

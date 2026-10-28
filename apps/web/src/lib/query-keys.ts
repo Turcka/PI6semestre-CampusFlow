@@ -16,6 +16,6 @@ export const queryKeys = {
   calendarEvents: (from: string, to: string) => ['calendar', 'events', from, to] as const,
   chatbotQuestions: () => ['chatbot', 'questions'] as const,
   matchWeights: () => ['match', 'weights'] as const,
-  users: (role?: string) => ['users', role ?? 'all'] as const,
+  users: (params?: string | Record<string, string | undefined>) => ['users', params ?? 'all'] as const,
   courses: () => ['courses'] as const,
 };

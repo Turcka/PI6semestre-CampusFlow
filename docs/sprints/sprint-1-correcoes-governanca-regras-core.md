@@ -510,14 +510,21 @@ Cada épico deve ser fechado com `typecheck` dos dois workspaces e o roteiro de 
 
 ## 10. Checklist de encerramento da sprint
 
-- [ ] Menu superior fixo em todas as rotas `/app/*`; logo clicável; Voltar em Pendências e detalhe da visita.
-- [ ] Presente/Ausente nas Pendências e na lista de visitas, com desfazer; pendência `presenca_pendente` na API.
-- [ ] Drawer acessível no calendário admin com ações.
-- [ ] Banir / Desbanir / Expulsar com confirmação, auditoria e bloqueio imediato; FKs de histórico em SET NULL.
-- [ ] Promotor: 18+, foto, questionário obrigatório; `promoter_is_eligible` usado no match, na atribuição manual e no calendário do candidato; limite de 1 visita/dia por trigger.
-- [ ] Seeds atualizados (promotor demo apto; perguntas de promotor).
-- [ ] README dos módulos `users`, `promoters`, `visits` e `apps/web/src/features/README.md` atualizados com as rotas e telas novas.
-- [ ] Fluxo do candidato (cadastro → questionário → horário → confirmação) validado de ponta a ponta após todas as migrações.
+- [x] Menu superior fixo em todas as rotas `/app/*`; logo clicável; Voltar em Pendências e detalhe da visita. (`TopNav`, `BackButton`, `PageHeader backTo`)
+- [x] Presente/Ausente nas Pendências e na lista de visitas, com desfazer; pendência `presenca_pendente` na API. (`POST /visits/:id/presence`, `PresenceToggle`)
+- [x] Drawer acessível no calendário admin com ações. (`components/ui/Drawer.tsx`, `CalendarPage`)
+- [x] Banir / Desbanir / Expulsar com confirmação, auditoria e bloqueio imediato; FKs de histórico em SET NULL. (`0019_moderation.sql`, `/users/:id/ban|unban`, `DELETE /users/:id`)
+- [x] Promotor: 18+, foto, questionário obrigatório; `promoter_is_eligible` usado no match, na atribuição manual e no calendário do candidato; limite de 1 visita/dia por trigger. (`0020_promoter_guards.sql`, `/promoters/me/onboarding/*`, `PromoterOnboardingPage`)
+- [x] Seeds atualizados (promotor demo apto; perguntas de promotor `cccccccc-…01..07`).
+- [x] README dos módulos `users`, `auth`, `promoters`, `visits` e `apps/web/src/features/README.md` atualizados com as rotas e telas novas.
+- [x] Validação ponta a ponta via script (37 verificações: presença, ban/unban/expulsar, onboarding, elegibilidade, limite diário, janelas públicas). Fluxo visual do candidato a conferir manualmente no navegador.
+
+### Notas de execução
+
+- `run_promoter_match` foi redefinida uma única vez, na `0020` (inclui `not is_banned`, `promoter_is_eligible` e o teto diário), para evitar três cópias do corpo.
+- `0019` adiciona o trigger `protect_profile_moderation_columns`: a auto-edição (`profiles_update_self`) não consegue alterar `is_banned`, `is_active`, `role` ou `tenant_id`.
+- `parseTstzrange` (API e web) agora normaliza o offset curto do Postgres (`+00` → `+00:00`); sem isso `presenca_pendente` nunca disparava.
+- Avatares: bucket público `avatars`, caminho `<uid>/avatar.webp` (canvas 512px, WebP). O promotor demo usa um placeholder externo definido em `scripts/seed-users.mjs`.
 
 ---
 

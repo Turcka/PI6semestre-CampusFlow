@@ -6,6 +6,7 @@ import { AppError } from '../../utils/app-error.js';
 import { domainEvents } from '../../utils/events.js';
 import { mapRpcError } from '../../utils/map-rpc-error.js';
 import { paginatedResponse, parsePagination } from '../../utils/pagination.js';
+import { parseTstzrange } from '../../utils/tstzrange.js';
 import type {
   assignVisitSchema,
   cancelVisitSchema,
@@ -13,11 +14,16 @@ import type {
   createVisitNoteSchema,
   listVisitsQuerySchema,
   rescheduleVisitSchema,
+  setPresenceSchema,
   setVisitStatusSchema,
 } from './visits.schemas.js';
 
 type ListQuery = z.infer<typeof listVisitsQuerySchema>;
 type SetStatus = z.infer<typeof setVisitStatusSchema>;
+type SetPresence = z.infer<typeof setPresenceSchema>;
+
+/** Status em que a visita ainda está "viva" na operação. */
+const ACTIVE_STATUSES = ['agendada', 'aguardando_promotor', 'aguardando_professor', 'confirmada', 'em_atendimento'];
 type NoteInput = z.infer<typeof createVisitNoteSchema>;
 type ManualVisit = z.infer<typeof createManualVisitSchema>;
 type Assign = z.infer<typeof assignVisitSchema>;
@@ -65,16 +71,30 @@ export async function listVisits(req: Request, query: ListQuery) {
   const { data, error, count } = await q;
   if (error) throw AppError.badRequest(error.message);
 
+  const now = Date.now();
   const enriched = (data ?? []).map((visit) => {
     const invitations = (visit.visit_invitations as Array<{ status: string }> | null) ?? [];
     const pendingIssues: string[] = [];
-    if (!visit.promoter_id) pendingIssues.push('sem_promotor');
+    if (!visit.promoter_id && ACTIVE_STATUSES.includes(visit.status)) pendingIssues.push('sem_promotor');
     if (visit.status === 'aguardando_professor') pendingIssues.push('aguardando_professor');
     if (invitations.some((i) => i.status === 'pending')) pendingIssues.push('convite_pendente');
+    const range = parseTstzrange(visit.period as string);
+    if (
+      (visit.status === 'confirmada' || visit.status === 'em_atendimento') &&
+      range &&
+      range.start.getTime() <= now
+    ) {
+      pendingIssues.push('presenca_pendente');
+    }
     return { ...visit, pendingIssues };
   });
 
-  return paginatedResponse(enriched, count ?? 0, page, pageSize);
+  const filtered =
+    query.pending === 'presenca'
+      ? enriched.filter((visit) => visit.pendingIssues.includes('presenca_pendente'))
+      : enriched;
+
+  return paginatedResponse(filtered, query.pending ? filtered.length : (count ?? 0), page, pageSize);
 }
 
 export async function getVisit(req: Request, visitId: string) {
@@ -119,6 +139,28 @@ export async function setVisitStatus(req: Request, visitId: string, input: SetSt
   });
   if (error) mapRpcError(error);
   return data;
+}
+
+/**
+ * Registro rápido de presença pelo admin: Presente → `realizada`, Ausente → `ausente`.
+ * `present: null` desfaz o registro e devolve a visita para `confirmada`.
+ */
+export async function setPresence(req: Request, visitId: string, input: SetPresence) {
+  const visit = await getVisit(req, visitId);
+  const allowedFrom = ['confirmada', 'em_atendimento', 'realizada', 'ausente'];
+  if (!allowedFrom.includes(visit.status as string)) {
+    throw AppError.conflict('PRESENCE_NOT_APPLICABLE', 'Presença só pode ser registrada em visitas confirmadas ou já encerradas.');
+  }
+
+  const status = input.present === null ? 'confirmada' : input.present ? 'realizada' : 'ausente';
+  const reason =
+    input.present === null
+      ? 'Registro de presença desfeito pelo administrador'
+      : input.present
+        ? 'Presença registrada pelo administrador'
+        : 'Ausência registrada pelo administrador';
+
+  return setVisitStatus(req, visitId, { status, reason });
 }
 
 export async function addNote(req: Request, visitId: string, input: NoteInput) {

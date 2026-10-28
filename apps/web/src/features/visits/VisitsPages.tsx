@@ -7,6 +7,8 @@ import { ApiError, v1Api } from '@/lib/api';
 import { formatDateTime, parseTstzrange } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
 
+import { PresenceToggle } from './PresenceToggle';
+
 type VisitRow = {
   id: string;
   status: string;
@@ -168,6 +170,7 @@ export function AdminVisitsPage() {
                 <th className="px-4 py-3">Candidato</th>
                 <th className="px-4 py-3">Horário</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Presença</th>
                 <th className="px-4 py-3">Pendências</th>
                 <th className="px-4 py-3">Match</th>
               </tr>
@@ -186,6 +189,9 @@ export function AdminVisitsPage() {
                     <td className="px-4 py-3">{range ? formatDateTime(range.start) : '—'}</td>
                     <td className="px-4 py-3">
                       <Badge status={visit.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <PresenceToggle visitId={visit.id} status={visit.status} compact />
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-600">
                       {(visit.pendingIssues ?? []).join(', ') || '—'}
@@ -225,7 +231,12 @@ export function VisitDetailPage({ visitId }: { visitId: string }) {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={candidate?.full_name ?? 'Detalhe da visita'} description={`Status: ${String(visit.status)}`} />
+      <PageHeader
+        title={candidate?.full_name ?? 'Detalhe da visita'}
+        description={`Status: ${String(visit.status)}`}
+        backTo="/app/visitas"
+        actions={<PresenceToggle visitId={visitId} status={String(visit.status)} />}
+      />
       <Card className="space-y-2">
         <h2 className="font-semibold">Resumo</h2>
         <p className="text-sm text-slate-600">{candidate?.profile_summary ?? 'Sem resumo.'}</p>

@@ -5,7 +5,8 @@ import { AuthLayout } from '@/app/layouts/AuthLayout';
 import { PublicLayout } from '@/app/layouts/PublicLayout';
 import { HomePage } from '@/app/pages/HomePage';
 import { LoginPage } from '@/features/auth/LoginPage';
-import { RequireAuth, RequireRole, homeForRole, useAuth } from '@/features/auth/AuthProvider';
+import { RequireAuth, RequirePromoterOnboarding, RequireRole, homeForRole, useAuth } from '@/features/auth/AuthProvider';
+import { PromoterOnboardingPage } from '@/features/onboarding/PromoterOnboardingPage';
 import { AvailabilityPage } from '@/features/availability/AvailabilityPage';
 import { CalendarPage } from '@/features/calendar/CalendarPage';
 import { CandidatePortalPage } from '@/features/candidate-portal/CandidatePortalPage';
@@ -62,11 +63,21 @@ const router = createBrowserRouter([
     path: '/app',
     element: (
       <RequireAuth>
-        <AppLayout />
+        <RequirePromoterOnboarding>
+          <AppLayout />
+        </RequirePromoterOnboarding>
       </RequireAuth>
     ),
     children: [
       { index: true, element: <AppHomeRedirect /> },
+      {
+        path: 'onboarding',
+        element: (
+          <RequireRole roles={['promotor']}>
+            <PromoterOnboardingPage />
+          </RequireRole>
+        ),
+      },
       {
         path: 'pendencias',
         element: (

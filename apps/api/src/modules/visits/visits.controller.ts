@@ -15,6 +15,10 @@ export const setStatus = asyncHandler(async (req: Request, res: Response) => {
   res.json(await visitsService.setVisitStatus(req, req.params.id!, req.body));
 });
 
+export const setPresence = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await visitsService.setPresence(req, req.params.id!, req.body));
+});
+
 export const addNote = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json(await visitsService.addNote(req, req.params.id!, req.body));
 });
