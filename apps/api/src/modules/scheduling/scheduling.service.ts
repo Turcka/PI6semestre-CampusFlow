@@ -6,6 +6,7 @@ import { AppError } from '../../utils/app-error.js';
 import { domainEvents } from '../../utils/events.js';
 import { mapRpcError } from '../../utils/map-rpc-error.js';
 import { paginatedResponse, parsePagination } from '../../utils/pagination.js';
+import { parseTstzrange } from '../../utils/tstzrange.js';
 import type {
   cancelVisitSchema,
   generateSlotsSchema,
@@ -132,14 +133,57 @@ export async function listPublicWindows(query: PublicWindows) {
     if (linkError) throw AppError.badRequest(linkError.message);
     eligibleOwnerIds = new Set((links ?? []).map((link) => link.promoter_id));
   }
-  const bookableSlots = eligibleOwnerIds
+  const courseSlots = eligibleOwnerIds
     ? openSlots.filter((slot) => eligibleOwnerIds.has(slot.owner_id))
     : openSlots;
+
+  // E5: só promotores aptos (18+, foto, onboarding, teste válido, ativo, não banido)
+  // e que ainda não atingiram o limite diário de visitas.
+  const candidateOwnerIds = [...new Set(courseSlots.map((slot) => slot.owner_id))];
+  const dayKey = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
+
+  const eligibleSet = new Set<string>();
+  const maxPerDay = new Map<string, number>();
+  if (candidateOwnerIds.length) {
+    const { data: eligibilityRows, error: eligibilityError } = await admin
+      .from('vw_promoter_eligibility')
+      .select('profile_id, eligible, max_visits_per_day')
+      .in('profile_id', candidateOwnerIds);
+    if (eligibilityError) throw AppError.badRequest(eligibilityError.message);
+    for (const row of eligibilityRows ?? []) {
+      if (row.eligible) eligibleSet.add(row.profile_id);
+      maxPerDay.set(row.profile_id, row.max_visits_per_day ?? 1);
+    }
+  }
+
+  const dailyCount = new Map<string, number>();
+  if (eligibleSet.size) {
+    const { data: activeVisits, error: visitsError } = await admin
+      .from('visits')
+      .select('promoter_id, period')
+      .in('promoter_id', [...eligibleSet])
+      .in('status', ['agendada', 'aguardando_promotor', 'aguardando_professor', 'confirmada', 'em_atendimento']);
+    if (visitsError) throw AppError.badRequest(visitsError.message);
+    for (const visit of activeVisits ?? []) {
+      const range = parseTstzrange(visit.period as string);
+      if (!visit.promoter_id || !range) continue;
+      const key = `${visit.promoter_id}|${dayKey(range.start.toISOString())}`;
+      dailyCount.set(key, (dailyCount.get(key) ?? 0) + 1);
+    }
+  }
+
+  const bookableSlots = courseSlots.filter((slot) => {
+    if (!eligibleSet.has(slot.owner_id)) return false;
+    const used = dailyCount.get(`${slot.owner_id}|${dayKey(slot.starts_at)}`) ?? 0;
+    return used < (maxPerDay.get(slot.owner_id) ?? 1);
+  });
+
   const ownerIds = [...new Set(bookableSlots.map((slot) => slot.owner_id))];
   const { data: owners } = ownerIds.length
-    ? await admin.from('profiles').select('id, full_name').in('id', ownerIds)
-    : { data: [] as Array<{ id: string; full_name: string }> };
+    ? await admin.from('profiles').select('id, full_name, avatar_url').in('id', ownerIds)
+    : { data: [] as Array<{ id: string; full_name: string; avatar_url: string | null }> };
   const ownerName = new Map((owners ?? []).map((owner) => [owner.id, owner.full_name]));
+  const ownerAvatar = new Map((owners ?? []).map((owner) => [owner.id, owner.avatar_url]));
 
   let professorSlots: Array<{ owner_id: string; starts_at: string; ends_at: string }> = [];
   if (candidate.campus_id) {
@@ -182,7 +226,7 @@ export async function listPublicWindows(query: PublicWindows) {
 
   const byDay = new Map<string, typeof bookableSlots>();
   for (const slot of bookableSlots) {
-    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(slot.starts_at));
+    const day = dayKey(slot.starts_at);
     const list = byDay.get(day) ?? [];
     list.push(slot);
     byDay.set(day, list);
@@ -202,7 +246,11 @@ export async function listPublicWindows(query: PublicWindows) {
           endsAt: window.ends_at,
           capacity: window.capacity,
           bookedCount: window.booked_count,
-          promoter: { id: window.owner_id, name: ownerName.get(window.owner_id) ?? 'Promotor' },
+          promoter: {
+            id: window.owner_id,
+            name: ownerName.get(window.owner_id) ?? 'Promotor',
+            avatarUrl: ownerAvatar.get(window.owner_id) ?? null,
+          },
           professor: professorFor(window.starts_at, window.ends_at),
         })),
       })),

@@ -25,11 +25,14 @@ export async function authMiddleware(req: Request, _res: Response, next: NextFun
 
     const { data: profile, error: profileError } = await admin
       .from('profiles')
-      .select('id, tenant_id, role, email, full_name, is_active')
+      .select('id, tenant_id, role, email, full_name, is_active, is_banned')
       .eq('id', data.user.id)
       .maybeSingle();
 
     if (profileError) throw AppError.badRequest(profileError.message);
+    if (profile?.is_banned) {
+      throw new AppError(403, 'USER_BANNED', 'Sua conta foi suspensa pela administração.');
+    }
     if (!profile || !profile.is_active) {
       throw AppError.forbidden('Perfil inativo ou não encontrado.');
     }

@@ -11,6 +11,8 @@ export const listVisitsQuerySchema = paginationQuerySchema.extend({
   q: z.string().trim().max(100).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  /** `presenca` devolve só visitas confirmadas cujo horário já começou e ainda sem desfecho. */
+  pending: z.enum(['presenca']).optional(),
 });
 
 export const visitIdParamsSchema = z.object({ id: uuidSchema });
@@ -18,6 +20,11 @@ export const visitIdParamsSchema = z.object({ id: uuidSchema });
 export const setVisitStatusSchema = z.object({
   status: z.enum(['em_atendimento', 'realizada', 'ausente', 'confirmada', 'cancelada']),
   reason: z.string().trim().max(500).optional(),
+});
+
+/** `present: true` → realizada; `false` → ausente; `null` → desfaz (volta para confirmada). */
+export const setPresenceSchema = z.object({
+  present: z.boolean().nullable(),
 });
 
 export const createVisitNoteSchema = z.object({

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { Button, Card, Spinner, Textarea } from '@/components/ui';
-import { ApiError, publicApi } from '@/lib/api';
+import { ApiError, publicApi, v1Api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
 type Question = {
@@ -26,36 +26,52 @@ type NextResponse = {
   isLast: boolean;
 };
 
+type Endpoint = {
+  /** Caminho base da sessão (sem `/next` ou `/answers`). */
+  basePath: string;
+  /** `public` usa /api/v1/public (candidato); `authenticated` usa /api/v1 com JWT (promotor). */
+  mode: 'public' | 'authenticated';
+};
+
 type Props = {
   sessionId: string;
   onFinished: () => void;
+  /** Padrão: sessão pública do candidato em /chatbot/sessions/:id. */
+  endpoint?: Endpoint;
+  finishLabel?: string;
 };
 
-export function ChatbotConversation({ sessionId, onFinished }: Props) {
+export function ChatbotConversation({ sessionId, onFinished, endpoint, finishLabel = 'Ir para revisão' }: Props) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Array<string | number>>([]);
   const [text, setText] = useState('');
   const [history, setHistory] = useState<Array<{ prompt: string; answer: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const basePath = endpoint?.basePath ?? `/chatbot/sessions/${sessionId}`;
+  const request = endpoint?.mode === 'authenticated' ? v1Api : publicApi;
 
   const nextQuery = useQuery({
-    queryKey: queryKeys.chatbotNext(sessionId),
-    queryFn: () => publicApi<NextResponse>(`/chatbot/sessions/${sessionId}/next`),
+    queryKey: [...queryKeys.chatbotNext(sessionId), basePath],
+    queryFn: () => request<NextResponse>(`${basePath}/next`),
   });
 
   const answerMutation = useMutation({
     mutationFn: async (payload: { questionId: string; value: unknown; prompt: string; answerLabel: string }) => {
-      await publicApi(`/chatbot/sessions/${sessionId}/answers`, {
+      await request(`${basePath}/answers`, {
         method: 'POST',
         body: JSON.stringify({ questionId: payload.questionId, value: payload.value }),
       });
       return payload;
     },
     onSuccess: async (payload) => {
+      setError(null);
       setHistory((prev) => [...prev, { prompt: payload.prompt, answer: payload.answerLabel }]);
       setSelected([]);
       setText('');
       await queryClient.invalidateQueries({ queryKey: queryKeys.chatbotNext(sessionId) });
     },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'Não foi possível salvar a resposta.'),
   });
 
   const question = nextQuery.data?.question ?? null;
@@ -99,20 +115,31 @@ export function ChatbotConversation({ sessionId, onFinished }: Props) {
         prompt: question.prompt,
         answerLabel,
       });
-    } catch (err) {
-      if (err instanceof ApiError) {
-        // keep UI silent besides disabling
-      }
+    } catch {
+      // erro já exibido via estado `error`
     }
   }
 
   if (nextQuery.isLoading) return <Spinner label="Preparando perguntas…" />;
 
+  if (nextQuery.isError) {
+    return (
+      <Card className="space-y-2">
+        <p className="text-sm text-rose-600">
+          {nextQuery.error instanceof ApiError ? nextQuery.error.message : 'Não foi possível carregar as perguntas.'}
+        </p>
+        <Button variant="secondary" onClick={() => void nextQuery.refetch()}>
+          Tentar novamente
+        </Button>
+      </Card>
+    );
+  }
+
   if (!question) {
     return (
       <Card className="space-y-4">
         <p className="text-sm text-slate-600">Questionário concluído. Vamos revisar suas respostas.</p>
-        <Button onClick={onFinished}>Ir para revisão</Button>
+        <Button onClick={onFinished}>{finishLabel}</Button>
       </Card>
     );
   }
@@ -189,6 +216,7 @@ export function ChatbotConversation({ sessionId, onFinished }: Props) {
           <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Digite sua resposta" />
         ) : null}
 
+        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
         <Button className="w-full" onClick={() => void submitCurrent()} disabled={answerMutation.isPending}>
           {answerMutation.isPending ? 'Enviando…' : nextQuery.data?.isLast ? 'Finalizar perguntas' : 'Próxima'}
         </Button>

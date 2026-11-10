@@ -137,19 +137,78 @@ export const messageTemplateSchema = z.object({
 });
 export type MessageTemplateInput = z.infer<typeof messageTemplateSchema>;
 
-export const inviteUserSchema = z.object({
+/** Idade completa em anos numa data de referência (padrão: hoje). */
+export function ageInYears(birthDate: string | Date, reference: Date = new Date()): number {
+  const birth = typeof birthDate === 'string' ? new Date(`${birthDate}T00:00:00`) : birthDate;
+  let age = reference.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    reference.getMonth() < birth.getMonth() ||
+    (reference.getMonth() === birth.getMonth() && reference.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+export const ADULT_AGE = 18;
+
+export function isAdult(birthDate: string | Date, reference: Date = new Date()): boolean {
+  return ageInYears(birthDate, reference) >= ADULT_AGE;
+}
+
+/** Data de nascimento `YYYY-MM-DD`, válida, no passado e com idade plausível (≤ 120 anos). */
+export const birthDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data deve estar no formato AAAA-MM-DD')
+  .refine((v) => !Number.isNaN(new Date(`${v}T00:00:00`).getTime()), 'Data inválida')
+  .refine((v) => new Date(`${v}T00:00:00`).getTime() < Date.now(), 'Data de nascimento deve estar no passado')
+  .refine((v) => ageInYears(v) <= 120, 'Data de nascimento inválida');
+
+/** Data de nascimento de promotor: obrigatoriamente maior de idade. */
+export const adultBirthDateSchema = birthDateSchema.refine((v) => isAdult(v), {
+  message: 'Promotores precisam ter 18 anos ou mais',
+});
+
+const inviteUserBaseSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   fullName: z.string().trim().min(3).max(120),
   role: z.enum(USER_ROLES),
   courseIds: z.array(uuidSchema).optional(),
+  phone: z.string().trim().max(30).optional(),
+  birthDate: birthDateSchema.optional(),
 });
+
+/** Promotor exige data de nascimento (e 18+); demais papéis é opcional. */
+function requireAdultPromoter(data: { role: string; birthDate?: string }, ctx: z.RefinementCtx) {
+  if (data.role !== 'promotor') return;
+  if (!data.birthDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['birthDate'], message: 'Data de nascimento é obrigatória para promotores' });
+    return;
+  }
+  if (!isAdult(data.birthDate)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['birthDate'], message: 'Promotores precisam ter 18 anos ou mais' });
+  }
+}
+
+export const inviteUserSchema = inviteUserBaseSchema.superRefine(requireAdultPromoter);
 export type InviteUserInput = z.infer<typeof inviteUserSchema>;
 
 /** Criação direta com senha (útil em ambiente local / admin seed). */
-export const createUserSchema = inviteUserSchema.extend({
-  password: z.string().min(8).max(72),
-});
+export const createUserSchema = inviteUserBaseSchema
+  .extend({
+    password: z.string().min(8).max(72),
+  })
+  .superRefine(requireAdultPromoter);
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+/** Auto-edição do próprio perfil (PATCH /auth/me). */
+export const updateMeSchema = z
+  .object({
+    fullName: z.string().trim().min(3).max(120).optional(),
+    phone: z.string().trim().max(30).nullable().optional(),
+    birthDate: birthDateSchema.nullable().optional(),
+    avatarUrl: z.string().url().max(500).nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: 'Informe ao menos um campo para atualizar.' });
+export type UpdateMeInput = z.infer<typeof updateMeSchema>;
 
 export const chatbotAnswerSchema = z.object({
   questionId: uuidSchema,

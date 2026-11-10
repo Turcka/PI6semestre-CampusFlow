@@ -45,11 +45,23 @@ export function phoneToE164(value: string) {
   return value.startsWith('+') ? value : `+${digits}`;
 }
 
+/** `2026-10-16 19:00:00+00` → `2026-10-16T19:00:00+00:00` (formato aceito por parseISO/Date). */
+function normalizePgTimestamp(raw: string): string {
+  let value = raw.trim().replace(' ', 'T');
+  value = value.replace(/([+-]\d{2})$/, '$1:00');
+  value = value.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  return value;
+}
+
+/** Converte o `tstzrange` serializado pelo PostgREST em ISO strings de início/fim. */
 export function parseTstzrange(period: string | null | undefined): { start: string; end: string } | null {
   if (!period) return null;
-  const match = period.match(/([0-9T:\-+.Z]+),\s*([0-9T:\-+.Z]+)/);
+  const match = /^[[(]\s*"?([^",]+?)"?\s*,\s*"?([^")\]]+?)"?\s*[)\]]$/.exec(period.trim());
   if (!match?.[1] || !match[2]) return null;
-  return { start: match[1], end: match[2] };
+  const start = normalizePgTimestamp(match[1]);
+  const end = normalizePgTimestamp(match[2]);
+  if (Number.isNaN(new Date(start).getTime()) || Number.isNaN(new Date(end).getTime())) return null;
+  return { start, end };
 }
 
 export function firstName(fullName: string | null | undefined) {

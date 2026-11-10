@@ -189,6 +189,95 @@ update public.chatbot_questions
 set course_id = '33333333-3333-3333-3333-333333333302'
 where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb09';
 
+-- -----------------------------------------------------------------------------
+-- Perguntas do onboarding do promotor (audience = 'promotor')
+-- Mesmas chaves de traits (perfil_tecnico, comunicacao), mesmos slugs de interesse
+-- e `focus` para alimentar preferred_focus — assim o match compara "maçã com maçã".
+-- -----------------------------------------------------------------------------
+insert into public.chatbot_questions (id, tenant_id, audience, key, prompt, kind, options, order_index)
+values
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc01',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_interesses',
+    'Sobre quais temas você mais gosta de conversar com visitantes?',
+    'multi_choice',
+    '[
+      {"value":"tec","label":"Tecnologia","interests":["tecnologia"],"traits":{"perfil_tecnico":0.3}},
+      {"value":"car","label":"Carros e mobilidade","interests":["carros"],"traits":{"perfil_tecnico":0.2}},
+      {"value":"emp","label":"Empreendedorismo","interests":["empreendedorismo"],"traits":{"comunicacao":0.2}},
+      {"value":"pes","label":"Pesquisa científica","interests":["pesquisa","laboratorios"],"traits":{"perfil_tecnico":0.3}},
+      {"value":"esp","label":"Esportes","interests":["esportes"]},
+      {"value":"sus","label":"Sustentabilidade","interests":["sustentabilidade"]},
+      {"value":"sau","label":"Saúde e bem-estar","interests":["saude"]}
+    ]'::jsonb, 1
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc02',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_foco',
+    'Que tipo de visita você conduz melhor?',
+    'multi_choice',
+    '[
+      {"value":"tecnico","label":"Técnica, com laboratórios e demonstrações","focus":"tecnico","interests":["laboratorios"],"traits":{"perfil_tecnico":0.2}},
+      {"value":"academico","label":"Acadêmica, explicando cursos e grade","focus":"academico"},
+      {"value":"profissional","label":"Profissional, falando de mercado e carreira","focus":"profissional","interests":["empreendedorismo"],"traits":{"comunicacao":0.1}},
+      {"value":"institucional","label":"Institucional, apresentando o campus","focus":"institucional","traits":{"comunicacao":0.1}}
+    ]'::jsonb, 2
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc03',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_comunicacao',
+    'Como você costuma explicar algo novo para alguém?',
+    'single_choice',
+    '[
+      {"value":"pratica","label":"Mostrando na prática, com exemplos e demonstrações","traits":{"comunicacao":0.2,"perfil_tecnico":0.2}},
+      {"value":"conversa","label":"Numa conversa aberta, respondendo às dúvidas","traits":{"comunicacao":0.4}},
+      {"value":"roteiro","label":"Seguindo um roteiro bem estruturado","traits":{"comunicacao":0.1}}
+    ]'::jsonb, 3
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc04',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_imprevisto',
+    'O visitante chega atrasado e sobra metade do tempo. O que você faz?',
+    'single_choice',
+    '[
+      {"value":"prioriza","label":"Pergunto o que ele mais quer ver e priorizo isso","traits":{"comunicacao":0.3}},
+      {"value":"resumo","label":"Sigo o roteiro completo em versão resumida","traits":{"comunicacao":0.1}},
+      {"value":"tecnico","label":"Levo direto aos laboratórios, onde o impacto é maior","traits":{"perfil_tecnico":0.3}}
+    ]'::jsonb, 4
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc05',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_tecnico',
+    'Quão confortável você se sente explicando detalhes técnicos (equipamentos, projetos, pesquisa)?',
+    'scale',
+    '[
+      {"value":"1","label":"Prefiro evitar","traits":{"perfil_tecnico":0.0}},
+      {"value":"2","label":"Consigo o básico","traits":{"perfil_tecnico":0.1}},
+      {"value":"3","label":"Confortável","traits":{"perfil_tecnico":0.2}},
+      {"value":"4","label":"Muito confortável","traits":{"perfil_tecnico":0.3}},
+      {"value":"5","label":"É o meu forte","traits":{"perfil_tecnico":0.4}}
+    ]'::jsonb, 5
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc06',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_publico',
+    'Com qual perfil de visitante você tem mais afinidade?',
+    'single_choice',
+    '[
+      {"value":"familia","label":"Famílias e responsáveis","traits":{"comunicacao":0.3}},
+      {"value":"vestibulando","label":"Vestibulandos decidindo o curso","traits":{"comunicacao":0.2}},
+      {"value":"curioso","label":"Curiosos por tecnologia e inovação","traits":{"perfil_tecnico":0.2},"interests":["tecnologia","pesquisa"]}
+    ]'::jsonb, 6
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccc07',
+    '11111111-1111-1111-1111-111111111111', 'promotor', 'p_motivacao',
+    'Em uma frase: por que você gosta de ser promotor?',
+    'free_text',
+    '[]'::jsonb, 7
+  )
+on conflict (id) do nothing;
+
 insert into public.professor_requirement_rules (tenant_id, course_id, focus, requirement, priority)
 select * from (values
   ('11111111-1111-1111-1111-111111111111'::uuid, '33333333-3333-3333-3333-333333333302'::uuid, 'tecnico'::public.visit_focus, 'recommended'::public.professor_requirement, 10),

@@ -30,10 +30,20 @@ const COURSE_EC = '33333333-3333-3333-3333-333333333302';
 const COURSE_EQ = '33333333-3333-3333-3333-333333333301';
 const PASSWORD = 'CampusFlow123!';
 
+/** Foto placeholder determinística (sem upload) para o promotor demo ficar "apto". */
+const PLACEHOLDER_AVATAR = 'https://api.dicebear.com/9.x/initials/png?seed=Promotor%20Demo&size=256';
+
 const USERS = [
-  { email: 'admin@campusflow.local', fullName: 'Admin CampusFlow', role: 'admin' },
-  { email: 'promotor@campusflow.local', fullName: 'Promotor Demo', role: 'promotor', courseIds: [COURSE_EC, COURSE_EQ] },
-  { email: 'professor@campusflow.local', fullName: 'Professor Demo', role: 'professor', courseIds: [COURSE_EC] },
+  { email: 'admin@campusflow.local', fullName: 'Admin CampusFlow', role: 'admin', birthDate: '1990-01-15' },
+  {
+    email: 'promotor@campusflow.local',
+    fullName: 'Promotor Demo',
+    role: 'promotor',
+    birthDate: '1998-05-10',
+    avatarUrl: PLACEHOLDER_AVATAR,
+    courseIds: [COURSE_EC, COURSE_EQ],
+  },
+  { email: 'professor@campusflow.local', fullName: 'Professor Demo', role: 'professor', birthDate: '1980-03-22', courseIds: [COURSE_EC] },
 ];
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
@@ -62,6 +72,7 @@ async function ensureUser(spec) {
         tenant_id: TENANT_ID,
         role: spec.role,
         full_name: spec.fullName,
+        birth_date: spec.birthDate ?? null,
       },
     });
     if (error) throw error;
@@ -71,10 +82,12 @@ async function ensureUser(spec) {
     await admin.auth.admin.updateUserById(user.id, {
       password: PASSWORD,
       email_confirm: true,
+      ban_duration: 'none',
       user_metadata: {
         tenant_id: TENANT_ID,
         role: spec.role,
         full_name: spec.fullName,
+        birth_date: spec.birthDate ?? null,
       },
     });
     console.log(`~ atualizado ${spec.role}: ${spec.email}`);
@@ -87,18 +100,33 @@ async function ensureUser(spec) {
     full_name: spec.fullName,
     email: spec.email,
     role: spec.role,
+    birth_date: spec.birthDate ?? null,
+    avatar_url: spec.avatarUrl ?? null,
     is_active: true,
+    is_banned: false,
+    banned_at: null,
+    banned_by: null,
+    ban_reason: null,
   });
   if (profileError) throw profileError;
 
   if (spec.role === 'promotor') {
+    // Onboarding já concluído e teste comportamental válido por 6 meses (Sprint 1 / E5)
+    const now = new Date();
+    const testExpires = new Date(now);
+    testExpires.setMonth(testExpires.getMonth() + 6);
+
     await admin.from('promoter_profiles').upsert({
       profile_id: user.id,
       bio: 'Promotor de demonstração — atende todos os cursos do campus.',
       preferred_focus: ['tecnico', 'academico', 'profissional', 'institucional'],
+      traits: { perfil_tecnico: 0.7, comunicacao: 0.6 },
       experience_level: 4,
-      max_visits_per_day: 6,
+      max_visits_per_day: 1,
       accepts_auto_match: true,
+      onboarding_completed_at: now.toISOString(),
+      behavioral_test_completed_at: now.toISOString(),
+      behavioral_test_expires_at: testExpires.toISOString(),
     });
 
     const { data: courses, error: coursesError } = await admin
@@ -162,6 +190,15 @@ async function ensureUser(spec) {
       console.warn(`! generate_visit_slots: ${slotsError.message}`);
     } else {
       console.log(`  slots gerados: ${inserted ?? 0}`);
+    }
+
+    const { data: eligibility } = await admin
+      .from('vw_promoter_eligibility')
+      .select('eligible, missing')
+      .eq('profile_id', user.id)
+      .maybeSingle();
+    if (eligibility) {
+      console.log(`  apto para visitas: ${eligibility.eligible ? 'sim' : `não (${(eligibility.missing ?? []).join(', ')})`}`);
     }
   }
 
