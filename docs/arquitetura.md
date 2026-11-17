@@ -5,6 +5,7 @@ Documento de referência que conecta os requisitos (RF/RNF), a stack definida na
 - [`plano-banco-de-dados.md`](plano-banco-de-dados.md)
 - [`plano-backend.md`](plano-backend.md)
 - [`plano-frontend.md`](plano-frontend.md)
+- [`plano-llm-secretario-virtual.md`](plano-llm-secretario-virtual.md) - secretário virtual com LLM para entrevistar visitantes
 
 ---
 
