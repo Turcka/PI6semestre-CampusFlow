@@ -8,6 +8,8 @@ declare global {
       user?: AuthUser;
       supabase?: SupabaseClient;
       requestId?: string;
+      /** Token do portal do candidato (header `X-Candidate-Token`), em rotas públicas do chatbot. */
+      candidateToken?: string;
     }
   }
 }

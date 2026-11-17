@@ -31,6 +31,10 @@ export const conversion = asyncHandler(async (req: Request, res: Response) => {
   res.json(await analyticsService.conversion(req, req.query as never));
 });
 
+export const priorities = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await analyticsService.priorities(req, req.query as never));
+});
+
 export const timeseries = asyncHandler(async (req: Request, res: Response) => {
   res.json(await analyticsService.timeseries(req, req.query as never));
 });

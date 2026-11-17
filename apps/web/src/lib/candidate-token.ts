@@ -9,6 +9,8 @@ export type CandidateSessionState = {
   /** Etapa da jornada a retomar (0 cadastro … 3 horário). */
   step?: number;
   profileSummary?: string | null;
+  /** `llm` = conversa com o secretário virtual; `guided` (ou ausente) = questionário por botões. */
+  mode?: 'guided' | 'llm';
 };
 
 export function saveCandidateSession(state: CandidateSessionState) {

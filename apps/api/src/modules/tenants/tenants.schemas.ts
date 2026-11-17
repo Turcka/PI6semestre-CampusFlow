@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { uuidSchema } from '@campusflow/shared';
+import { assistantSettingsSchema, uuidSchema } from '@campusflow/shared';
 
 export const updateTenantSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -8,6 +8,11 @@ export const updateTenantSchema = z.object({
   logoUrl: z.string().url().nullable().optional(),
   settings: z.record(z.unknown()).optional(),
   isActive: z.boolean().optional(),
+});
+
+/** Atualização parcial de `tenants.settings`: hoje só a seção do assistente virtual. */
+export const updateTenantSettingsSchema = z.object({
+  assistant: assistantSettingsSchema,
 });
 
 export const createCampusSchema = z.object({

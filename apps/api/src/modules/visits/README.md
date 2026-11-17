@@ -10,6 +10,8 @@ Visitas agendadas, status, notas, briefing e pendências operacionais.
 - `GET /api/v1/visits/:id`, `POST /api/v1/visits` (manual), `PATCH /api/v1/visits/:id/status`,
   `POST /api/v1/visits/:id/notes`, `GET /api/v1/visits/:id/briefing`, `POST /api/v1/visits/:id/cancel`,
   `POST /api/v1/visits/:id/reschedule`.
+- O briefing traz `candidate.aiInsights` (prioridades, dúvidas, estágio de decisão, pontos de conversa) quando o
+  candidato conversou com o secretário virtual; `null` caso contrário. A transcrição não é exposta aqui.
 - `POST /api/v1/visits/:id/assign { promoterId, professorId? }` (admin) — RPC `assign_visit_manually`;
   recusa inativos/banidos (`PROFILE_NOT_ASSIGNABLE`) e promotores não aptos (`PROMOTER_NOT_ELIGIBLE`).
 - `POST /api/v1/visits/:id/resolve` (admin) — assign + `confirmada` + convites aceitos, em um passo.

@@ -181,6 +181,72 @@ values
   )
 on conflict (id) do nothing;
 
+-- Perguntas sobre decisão de matrícula (secretário virtual; também funcionam no modo de botões).
+-- As options de `prioridades_matricula` não carregam interests/traits: são lidas pela síntese
+-- e pelo dashboard, não pelo match.
+insert into public.chatbot_questions (id, tenant_id, audience, key, prompt, kind, options, order_index)
+values
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb10',
+    '11111111-1111-1111-1111-111111111111', 'candidato', 'prioridades_matricula',
+    'Na hora de escolher onde se matricular, o que pesa mais para você? (pode escolher até 3)',
+    'multi_choice',
+    '[
+      {"value":"custo_bolsas","label":"Mensalidade, bolsas e financiamento"},
+      {"value":"empregabilidade","label":"Empregabilidade e estágios"},
+      {"value":"infraestrutura","label":"Laboratórios e infraestrutura"},
+      {"value":"reputacao","label":"Reputação e qualidade do ensino"},
+      {"value":"localizacao","label":"Localização e deslocamento"},
+      {"value":"vida_campus","label":"Vida no campus (atléticas, eventos, convivência)"},
+      {"value":"intercambio","label":"Intercâmbio e dupla titulação"}
+    ]'::jsonb, 4
+  ),
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb11',
+    '11111111-1111-1111-1111-111111111111', 'candidato', 'momento_escolar',
+    'Em que momento você está hoje?',
+    'single_choice',
+    '[
+      {"value":"em2","label":"2º ano do Ensino Médio"},
+      {"value":"em3","label":"3º ano do Ensino Médio"},
+      {"value":"concluido","label":"Já concluí o Ensino Médio"},
+      {"value":"transferencia","label":"Já faço faculdade e penso em transferir"},
+      {"value":"outro","label":"Outro"}
+    ]'::jsonb, 9
+  ),
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb12',
+    '11111111-1111-1111-1111-111111111111', 'candidato', 'prazo_decisao',
+    'Quando você pretende decidir onde vai estudar?',
+    'single_choice',
+    '[
+      {"value":"este_semestre","label":"Ainda neste semestre"},
+      {"value":"proximo_semestre","label":"No próximo semestre"},
+      {"value":"proximo_ano","label":"Só no ano que vem"},
+      {"value":"indefinido","label":"Ainda não sei"}
+    ]'::jsonb, 10
+  ),
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb13',
+    '11111111-1111-1111-1111-111111111111', 'candidato', 'quem_decide',
+    'Quem participa dessa decisão com você?',
+    'multi_choice',
+    '[
+      {"value":"sozinho","label":"Decido sozinho(a)"},
+      {"value":"pais","label":"Pais ou responsáveis"},
+      {"value":"amigos","label":"Amigos"},
+      {"value":"escola","label":"Orientação da escola"}
+    ]'::jsonb, 11
+  )
+on conflict (id) do nothing;
+
+-- Secretário virtual ligado no tenant de desenvolvimento. Só tem efeito quando a API sobe com
+-- LLM_ENABLED=true e LLM_API_KEY; os fatos institucionais são cadastrados em Configurações.
+update public.tenants
+set settings = jsonb_set(settings, '{assistant,enabled}', 'true'::jsonb, true)
+where id = '11111111-1111-1111-1111-111111111111'
+  and settings ? 'assistant';
+
 update public.chatbot_questions
 set is_active = false
 where key = 'disponibilidade';

@@ -233,6 +233,100 @@ export const chatbotQuestionSchema = z.object({
 });
 export type ChatbotQuestionInput = z.infer<typeof chatbotQuestionSchema>;
 
+// -----------------------------------------------------------------------------
+// Secretário virtual (LLM)
+// -----------------------------------------------------------------------------
+
+/** Versão do texto de consentimento exibido no cadastro público (gravada em candidates.metadata). */
+export const CONSENT_VERSION = '2026-11-assistente-ia';
+
+export const CHATBOT_SESSION_MODES = ['guided', 'llm'] as const;
+export type ChatbotSessionMode = (typeof CHATBOT_SESSION_MODES)[number];
+
+/** Mensagem do visitante para o secretário virtual. */
+export const assistantMessageSchema = z.object({
+  content: z.string().trim().min(1).max(1000),
+});
+export type AssistantMessageInput = z.infer<typeof assistantMessageSchema>;
+
+export const assistantModeSchema = z.object({
+  mode: z.enum(CHATBOT_SESSION_MODES),
+});
+
+/** Critérios de decisão de matrícula (values da pergunta `prioridades_matricula`). */
+export const MATRICULATION_PRIORITIES = [
+  'custo_bolsas',
+  'empregabilidade',
+  'infraestrutura',
+  'reputacao',
+  'localizacao',
+  'vida_campus',
+  'intercambio',
+] as const;
+export type MatriculationPriority = (typeof MATRICULATION_PRIORITIES)[number];
+
+export const MATRICULATION_PRIORITY_LABELS: Record<MatriculationPriority, string> = {
+  custo_bolsas: 'Mensalidade, bolsas e financiamento',
+  empregabilidade: 'Empregabilidade e estágios',
+  infraestrutura: 'Laboratórios e infraestrutura',
+  reputacao: 'Reputação e qualidade do ensino',
+  localizacao: 'Localização e deslocamento',
+  vida_campus: 'Vida no campus',
+  intercambio: 'Intercâmbio e dupla titulação',
+};
+
+export const DECISION_STAGES = ['explorando', 'comparando', 'decidido'] as const;
+export const DECISION_INFLUENCERS = ['sozinho', 'pais', 'amigos', 'escola'] as const;
+export const SCHOOL_MOMENTS = ['em2', 'em3', 'concluido', 'transferencia', 'outro'] as const;
+export const DECISION_TIMELINES = ['este_semestre', 'proximo_semestre', 'proximo_ano', 'indefinido'] as const;
+
+/** Insights gerados pela síntese da conversa (candidates.ai_insights). */
+export const aiInsightsSchema = z.object({
+  /** Resumo em linguagem natural (cópia do que vai para candidates.profile_summary). */
+  summary: z.string().max(1200).optional(),
+  priorities: z
+    .array(
+      z.object({
+        key: z.enum(MATRICULATION_PRIORITIES),
+        rank: z.number().int().min(1).max(7),
+        evidence: z.string().max(200).optional(),
+      }),
+    )
+    .max(7),
+  goals: z.array(z.string().max(200)).max(5),
+  doubts: z.array(z.string().max(200)).max(8),
+  objections: z.array(z.string().max(200)).max(5),
+  decisionStage: z.enum(DECISION_STAGES).nullable(),
+  influencers: z.array(z.enum(DECISION_INFLUENCERS)),
+  schoolMoment: z.enum(SCHOOL_MOMENTS).nullable(),
+  decisionTimeline: z.enum(DECISION_TIMELINES).nullable(),
+  suggestedFocus: z.enum(VISIT_FOCUSES).nullable(),
+  talkingPoints: z.array(z.string().max(200)).max(3),
+  model: z.string().optional(),
+  generatedAt: z.string().datetime().optional(),
+});
+export type AiInsights = z.infer<typeof aiInsightsSchema>;
+
+/** Configuração do assistente por tenant (tenants.settings.assistant). */
+export const assistantSettingsSchema = z.object({
+  enabled: z.boolean(),
+  persona_name: z.string().trim().min(2).max(40),
+  tone: z.string().trim().min(3).max(120),
+  facts: z
+    .array(z.object({ topic: z.string().trim().min(2).max(60), text: z.string().trim().min(3).max(500) }))
+    .max(40),
+  max_turns: z.number().int().min(4).max(40),
+});
+export type AssistantSettings = z.infer<typeof assistantSettingsSchema>;
+
+export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
+  enabled: false,
+  persona_name: 'Sofia',
+  tone: 'acolhedor e direto',
+  facts: [],
+  max_turns: 16,
+};
+
 export const setVisitStatusSchema = z.object({
   status: z.enum(VISIT_STATUSES),
   reason: z.string().trim().max(500).optional(),

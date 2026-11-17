@@ -17,6 +17,12 @@ export const candidatesRouter = Router();
 
 candidatesRouter.get('/', requireRole('admin'), validate({ query: listCandidatesQuerySchema }), candidatesController.list);
 candidatesRouter.get('/:id', requireRole('admin'), validate({ params: candidateIdParamsSchema }), candidatesController.getById);
+candidatesRouter.get(
+  '/:id/transcript',
+  requireRole('admin'),
+  validate({ params: candidateIdParamsSchema }),
+  candidatesController.getTranscript,
+);
 candidatesRouter.patch(
   '/:id',
   requireRole('admin'),

@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { addDays, format, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useMemo } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { Card, EmptyState, PageHeader, Spinner } from '@/components/ui';
+import { Card, EmptyState, PageHeader, Select, Spinner } from '@/components/ui';
 import { ApiError, v1Api } from '@/lib/api';
 import { formatPercent } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
@@ -34,6 +34,77 @@ function num(value: number | string | null | undefined) {
 
 function messageOf(error: unknown) {
   return error instanceof ApiError ? error.message : 'Não foi possível carregar os indicadores.';
+}
+
+type PrioritiesPayload = {
+  respondents: number;
+  items: Array<{ key: string; label: string; mentions: number; top1: number; avgRank: number }>;
+};
+
+/**
+ * "O que pesa na matrícula": prioridades citadas pelos visitantes na conversa com o assistente virtual.
+ * Fica oculto enquanto não há nenhuma conversa concluída (e nenhum filtro de curso aplicado).
+ */
+function PrioritiesCard({ courses }: { courses: Course[] }) {
+  const [courseId, setCourseId] = useState('');
+
+  const prioritiesQuery = useQuery({
+    queryKey: queryKeys.analyticsPriorities(courseId || undefined),
+    queryFn: () => v1Api<PrioritiesPayload>(`/analytics/priorities${courseId ? `?courseId=${courseId}` : ''}`),
+  });
+
+  const items = prioritiesQuery.data?.items ?? [];
+  const respondents = prioritiesQuery.data?.respondents ?? 0;
+  if (!courseId && !items.length) return null;
+
+  return (
+    <Card>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-900">O que pesa na matrícula</h2>
+          <p className="text-sm text-slate-500">
+            Prioridades citadas na conversa com o assistente virtual
+            {respondents ? ` · ${respondents} ${respondents === 1 ? 'visitante' : 'visitantes'}` : ''}.
+          </p>
+        </div>
+        <div className="sm:w-64">
+          <label htmlFor="priorities-course" className="sr-only">
+            Filtrar por curso
+          </label>
+          <Select id="priorities-course" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+            <option value="">Todos os cursos</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </div>
+
+      {prioritiesQuery.isLoading ? (
+        <Spinner />
+      ) : prioritiesQuery.isError ? (
+        <p className="text-sm text-rose-600">{messageOf(prioritiesQuery.error)}</p>
+      ) : !items.length ? (
+        <p className="text-sm text-slate-500">Nenhuma prioridade registrada para este curso.</p>
+      ) : (
+        <div style={{ height: Math.max(180, items.length * 52) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={items} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <CartesianGrid stroke="#e2e8f0" horizontal={false} />
+              <XAxis type="number" allowDecimals={false} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={210} tick={{ fill: '#334155', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="mentions" name="Citaram" fill="#93c5fd" radius={[0, 6, 6, 0]} />
+              <Bar dataKey="top1" name="1ª prioridade" fill="#2563eb" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export function DashboardPage() {
@@ -242,6 +313,8 @@ export function DashboardPage() {
           </Card>
         </div>
       )}
+
+      <PrioritiesCard courses={coursesQuery.data ?? []} />
 
       {byCourse.length ? (
         <Card>

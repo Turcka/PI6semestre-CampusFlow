@@ -11,6 +11,14 @@ export const patchCurrent = asyncHandler(async (req: Request, res: Response) => 
   res.json(await tenantsService.updateCurrentTenant(req, req.body));
 });
 
+export const getSettings = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await tenantsService.getAssistantSettings(req));
+});
+
+export const patchSettings = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await tenantsService.updateAssistantSettings(req, req.body));
+});
+
 export const listCampuses = asyncHandler(async (req: Request, res: Response) => {
   res.json(await tenantsService.listCampuses(req));
 });

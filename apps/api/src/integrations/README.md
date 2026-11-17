@@ -6,6 +6,7 @@ Adaptadores para serviços externos. Cada integração expõe uma interface est�
 | --- | --- | --- |
 | `whatsapp/` | WhatsApp Cloud API (Meta Graph API) | Envio de mensagens de template aprovadas, mensagens de texto dentro da janela de 24h, mídia/localização; parsing de webhooks de status. |
 | `sendgrid/` | SendGrid (`@sendgrid/mail`) | Envio de e-mails com dynamic templates, categorias por tenant para métricas; validação de assinatura do Event Webhook. |
+| `llm/` | LLM (OpenAI, compatíveis com OpenAI, Anthropic, Gemini) | Geração de JSON estruturado para o secretário virtual do chatbot, com prazo, nova tentativa e erro tipado. Desligado por padrão (`LLM_ENABLED`). |
 | `mapbox/` | Mapbox APIs | Geocodificação de endereços de campus/POIs e cálculo de rotas (Directions API) quando necessário no servidor. O frontend consome tiles diretamente via Leaflet. |
 
 Contrato sugerido:

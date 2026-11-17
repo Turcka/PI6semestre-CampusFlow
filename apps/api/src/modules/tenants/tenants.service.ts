@@ -1,10 +1,18 @@
 import type { Request } from 'express';
 
+import { isLlmEnabled } from '../../integrations/llm/llm.client.js';
 import { AppError } from '../../utils/app-error.js';
-import type { createCampusSchema, updateCampusSchema, updateTenantSchema } from './tenants.schemas.js';
+import { resolveAssistantSettings } from '../chatbot/assistant/settings.js';
+import type {
+  createCampusSchema,
+  updateCampusSchema,
+  updateTenantSchema,
+  updateTenantSettingsSchema,
+} from './tenants.schemas.js';
 import type { z } from 'zod';
 
 type UpdateTenant = z.infer<typeof updateTenantSchema>;
+type UpdateTenantSettings = z.infer<typeof updateTenantSettingsSchema>;
 type CreateCampus = z.infer<typeof createCampusSchema>;
 type UpdateCampus = z.infer<typeof updateCampusSchema>;
 
@@ -36,6 +44,38 @@ export async function updateCurrentTenant(req: Request, input: UpdateTenant) {
   const { data, error } = await supabase.from('tenants').update(patch).eq('id', user.tenantId).select().single();
   if (error) throw AppError.badRequest(error.message);
   return data;
+}
+
+async function readSettings(req: Request): Promise<Record<string, unknown>> {
+  const { user, supabase } = requireUser(req);
+  const { data, error } = await supabase.from('tenants').select('settings').eq('id', user.tenantId).single();
+  if (error || !data) throw AppError.notFound('Tenant não encontrado.');
+  const settings: unknown = data.settings;
+  return settings && typeof settings === 'object' && !Array.isArray(settings) ? (settings as Record<string, unknown>) : {};
+}
+
+/**
+ * Configuração do secretário virtual. `llmAvailable` informa se a LLM está ligada no ambiente da API
+ * (`LLM_ENABLED` + chave): com ela desligada, habilitar o assistente aqui não tem efeito.
+ */
+export async function getAssistantSettings(req: Request) {
+  const settings = await readSettings(req);
+  return { assistant: resolveAssistantSettings(settings), llmAvailable: isLlmEnabled() };
+}
+
+/** Grava `settings.assistant` preservando as demais chaves de `tenants.settings`. */
+export async function updateAssistantSettings(req: Request, input: UpdateTenantSettings) {
+  const { user, supabase } = requireUser(req);
+  const current = await readSettings(req);
+
+  const { data, error } = await supabase
+    .from('tenants')
+    .update({ settings: { ...current, assistant: input.assistant } })
+    .eq('id', user.tenantId)
+    .select('settings')
+    .single();
+  if (error) throw AppError.badRequest(error.message);
+  return { assistant: resolveAssistantSettings(data.settings), llmAvailable: isLlmEnabled() };
 }
 
 export async function listCampuses(req: Request) {

@@ -8,6 +8,7 @@ import {
   createCampusSchema,
   updateCampusSchema,
   updateTenantSchema,
+  updateTenantSettingsSchema,
 } from './tenants.schemas.js';
 
 export const tenantsRouter = Router();
@@ -18,6 +19,14 @@ tenantsRouter.patch(
   requireRole('admin'),
   validate({ body: updateTenantSchema }),
   tenantsController.patchCurrent,
+);
+
+tenantsRouter.get('/current/settings', requireRole('admin'), tenantsController.getSettings);
+tenantsRouter.patch(
+  '/current/settings',
+  requireRole('admin'),
+  validate({ body: updateTenantSettingsSchema }),
+  tenantsController.patchSettings,
 );
 
 tenantsRouter.get('/current/campuses', tenantsController.listCampuses);

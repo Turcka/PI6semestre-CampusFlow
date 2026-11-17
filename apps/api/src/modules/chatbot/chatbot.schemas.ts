@@ -1,6 +1,8 @@
 ﻿import { chatbotAnswerSchema, chatbotQuestionSchema, uuidSchema } from '@campusflow/shared';
 import { z } from 'zod';
 
+export { assistantMessageSchema, assistantModeSchema } from '@campusflow/shared';
+
 export const sessionIdParamsSchema = z.object({ id: uuidSchema });
 export const questionIdParamsSchema = z.object({ id: uuidSchema });
 export const categoryIdParamsSchema = z.object({ id: uuidSchema });

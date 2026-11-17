@@ -1,10 +1,15 @@
-﻿import type { Request } from 'express';
+﻿import { CONSENT_VERSION, type ChatbotSessionMode } from '@campusflow/shared';
+import type { Request } from 'express';
 import type { z } from 'zod';
 
 import { env } from '../../config/env.js';
+import { logger } from '../../config/logger.js';
 import { getAdminClient } from '../../config/supabase.js';
+import { isLlmEnabled } from '../../integrations/llm/llm.client.js';
 import { AppError } from '../../utils/app-error.js';
 import { paginatedResponse, parsePagination } from '../../utils/pagination.js';
+import { getAssistantSettings } from '../chatbot/assistant/assistant.repository.js';
+import { readAiInsights } from '../chatbot/assistant/insights.js';
 import type {
   listCandidatesQuerySchema,
   publicCandidatePatchSchema,
@@ -78,6 +83,64 @@ export async function getCandidate(req: Request, candidateId: string) {
   return data;
 }
 
+/**
+ * Transcrição da última sessão do candidato com o secretário virtual. Lida com o cliente do usuário:
+ * a RLS de `chatbot_messages` só libera o admin do tenant. Mensagens `system` (marcadores internos) ficam de fora.
+ */
+export async function getCandidateTranscript(req: Request, candidateId: string) {
+  const { user, supabase } = requireUser(req);
+
+  const { data: candidate, error: candidateError } = await supabase
+    .from('candidates')
+    .select('id, ai_insights')
+    .eq('id', candidateId)
+    .eq('tenant_id', user.tenantId)
+    .maybeSingle();
+  if (candidateError) throw AppError.badRequest(candidateError.message);
+  if (!candidate) throw AppError.notFound('Candidato não encontrado.');
+
+  const { data: session, error: sessionError } = await supabase
+    .from('chatbot_sessions')
+    .select('id, mode, status, started_at, completed_at, llm_turns, fallback_reason')
+    .eq('candidate_id', candidateId)
+    .eq('tenant_id', user.tenantId)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (sessionError) throw AppError.badRequest(sessionError.message);
+
+  const insights = readAiInsights(candidate.ai_insights);
+  if (!session) return { session: null, insights, messages: [] };
+
+  const { data: messages, error: messagesError } = await supabase
+    .from('chatbot_messages')
+    .select('id, role, content, created_at')
+    .eq('session_id', session.id)
+    .in('role', ['user', 'assistant'])
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
+  if (messagesError) throw AppError.badRequest(messagesError.message);
+
+  return {
+    session: {
+      id: session.id,
+      mode: session.mode,
+      status: session.status,
+      startedAt: session.started_at,
+      completedAt: session.completed_at,
+      turns: session.llm_turns,
+      fallbackReason: session.fallback_reason,
+    },
+    insights,
+    messages: (messages ?? []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.created_at,
+    })),
+  };
+}
+
 export async function updateCandidate(req: Request, candidateId: string, input: UpdateCandidate) {
   const { user, supabase } = requireUser(req);
   const patch = buildCandidatePatch(input);
@@ -122,6 +185,8 @@ export async function createPublicCandidate(input: PublicCandidate) {
       hygiene_status: 'valid',
       consent_at: new Date().toISOString(),
       consent_source: 'chatbot_publico',
+      // Versão do texto de consentimento aceito (menciona o assistente de IA).
+      metadata: { consent_version: CONSENT_VERSION },
     })
     .select('id, portal_token, full_name, email, phone, cpf, course_id, campus_id, status, created_at')
     .single();
@@ -131,14 +196,30 @@ export async function createPublicCandidate(input: PublicCandidate) {
     throw AppError.badRequest(error.message);
   }
 
+  const mode = await resolveSessionMode(course.tenant_id);
   const { data: session, error: sessionError } = await admin
     .from('chatbot_sessions')
-    .insert({ tenant_id: course.tenant_id, candidate_id: candidate.id, audience: 'candidato', channel: 'web' })
+    .insert({ tenant_id: course.tenant_id, candidate_id: candidate.id, audience: 'candidato', channel: 'web', mode })
     .select('id')
     .single();
   if (sessionError) throw AppError.badRequest(sessionError.message);
 
-  return { sessionId: session.id, portalToken: candidate.portal_token, candidateId: candidate.id };
+  return { sessionId: session.id, portalToken: candidate.portal_token, candidateId: candidate.id, mode };
+}
+
+/**
+ * `llm` só quando a LLM está ligada no ambiente e o assistente habilitado no tenant.
+ * Qualquer falha ao ler a configuração cai no questionário por botões — o cadastro nunca quebra por isso.
+ */
+async function resolveSessionMode(tenantId: string): Promise<ChatbotSessionMode> {
+  if (!isLlmEnabled()) return 'guided';
+  try {
+    const assistant = await getAssistantSettings(tenantId);
+    return assistant.enabled ? 'llm' : 'guided';
+  } catch (err) {
+    logger.warn({ tenantId, reason: err instanceof Error ? err.message : 'erro desconhecido' }, 'Não foi possível ler a configuração do assistente');
+    return 'guided';
+  }
 }
 
 async function getCandidateByToken(token: string) {
@@ -161,7 +242,7 @@ export async function getPublicMe(token: string) {
     admin.from('campuses').select('slug, name').eq('id', candidate.campus_id).maybeSingle(),
     admin
       .from('chatbot_sessions')
-      .select('id')
+      .select('id, mode')
       .eq('candidate_id', candidate.id)
       .order('started_at', { ascending: false })
       .limit(1)
@@ -172,6 +253,7 @@ export async function getPublicMe(token: string) {
     ...candidate,
     campus_slug: campus?.slug ?? null,
     session_id: session?.id ?? null,
+    session_mode: (session?.mode as ChatbotSessionMode | undefined) ?? null,
   };
 }
 

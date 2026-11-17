@@ -7,6 +7,8 @@ import { ONBOARDING_LABELS, useAuth } from '@/features/auth/AuthProvider';
 import { ApiError, v1Api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
+import { AssistantSettingsCard } from './AssistantSettingsCard';
+
 type UserRow = {
   id: string;
   full_name: string;
@@ -257,7 +259,7 @@ export function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Configurações"
-        description="Usuários da instituição, perguntas do chatbot e pesos do match."
+        description="Usuários da instituição, assistente virtual, perguntas do chatbot e pesos do match."
       />
 
       <Card className="space-y-4">
@@ -433,6 +435,8 @@ export function SettingsPage() {
           {createUser.isPending ? 'Criando…' : 'Criar usuário'}
         </Button>
       </Card>
+
+      <AssistantSettingsCard />
 
       <Card className="space-y-3">
         <h2 className="font-semibold">Perguntas do chatbot</h2>
