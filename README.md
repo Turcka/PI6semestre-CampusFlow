@@ -11,8 +11,6 @@ Projeto Integrador - 6º semestre - Instituto Mauá de Tecnologia.
 | Arthur Trindade de Souza | 24.002046 |
 | Pedro Henrique de Paiva Bittencourt | 24.001627 |
 | Miguel Gonçalves Neto | 24.009270 |
-| Matheus Garcia Mattoso | 24.003042 |
-| Guilherme Viana | 24.006890 |
 
 ## Stack
 
