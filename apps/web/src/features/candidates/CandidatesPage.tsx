@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Badge, Button, Card, EmptyState, Input, PageHeader, Spinner } from '@/components/ui';
+import { InsightsPanel, parseInsights } from '@/features/chatbot/InsightsPanel';
 import { v1Api } from '@/lib/api';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -20,6 +21,60 @@ type Candidate = {
 
 type Paginated<T> = { data: T[]; total: number };
 
+type Transcript = {
+  session: { id: string; mode: 'guided' | 'llm'; status: string; turns: number; fallbackReason: string | null } | null;
+  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; createdAt: string }>;
+};
+
+/** Conversa do candidato com o secretário virtual. Só o admin acessa; carregada sob demanda. */
+function TranscriptSection({ candidateId }: { candidateId: string }) {
+  const [open, setOpen] = useState(false);
+  const transcriptQuery = useQuery({
+    queryKey: queryKeys.candidateTranscript(candidateId),
+    queryFn: () => v1Api<Transcript>(`/candidates/${candidateId}/transcript`),
+    enabled: open,
+  });
+  const messages = transcriptQuery.data?.messages ?? [];
+
+  return (
+    <section className="space-y-2 border-t border-slate-100 pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">Conversa com o assistente</h3>
+        <Button variant="ghost" className="min-h-9 px-3 text-xs" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+          {open ? 'Ocultar' : 'Ver conversa'}
+        </Button>
+      </div>
+      {!open ? null : transcriptQuery.isLoading ? (
+        <Spinner />
+      ) : transcriptQuery.isError ? (
+        <p className="text-sm text-rose-600">Não foi possível carregar a conversa.</p>
+      ) : !messages.length ? (
+        <p className="text-sm text-slate-500">Este candidato respondeu pelo questionário de opções; não há conversa registrada.</p>
+      ) : (
+        <>
+          <p className="text-xs text-slate-500">
+            Dados pessoais digitados no chat são mascarados antes de gravar. A conversa é apagada 180 dias após a conclusão.
+          </p>
+          <ol className="max-h-96 space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">
+            {messages.map((message) => (
+              <li key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
+                    message.role === 'user' ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-800'
+                  }`}
+                >
+                  <span className="sr-only">{message.role === 'user' ? 'Candidato: ' : 'Assistente: '}</span>
+                  {message.content}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function CandidatesPage() {
   const [q, setQ] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -34,6 +89,7 @@ export function CandidatesPage() {
     queryFn: () => v1Api<Record<string, unknown>>(`/candidates/${selectedId}`),
     enabled: Boolean(selectedId),
   });
+  const insights = parseInsights(detailQuery.data?.ai_insights);
 
   return (
     <div>
@@ -87,6 +143,8 @@ export function CandidatesPage() {
                 <p className="text-sm text-slate-700">
                   {(detailQuery.data as Candidate).profile_summary ?? 'Perfil ainda não concluído no chatbot.'}
                 </p>
+                {insights ? <InsightsPanel insights={insights} variant="plain" /> : null}
+                <TranscriptSection key={selectedId} candidateId={selectedId} />
                 <Button variant="secondary" onClick={() => setSelectedId(null)}>
                   Fechar
                 </Button>

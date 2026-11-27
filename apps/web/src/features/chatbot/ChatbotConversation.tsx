@@ -39,9 +39,11 @@ type Props = {
   /** Padrão: sessão pública do candidato em /chatbot/sessions/:id. */
   endpoint?: Endpoint;
   finishLabel?: string;
+  /** Token do portal do candidato (sessão pública): enviado em `X-Candidate-Token`. */
+  candidateToken?: string;
 };
 
-export function ChatbotConversation({ sessionId, onFinished, endpoint, finishLabel = 'Ir para revisão' }: Props) {
+export function ChatbotConversation({ sessionId, onFinished, endpoint, finishLabel = 'Ir para revisão', candidateToken }: Props) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Array<string | number>>([]);
   const [text, setText] = useState('');
@@ -53,13 +55,14 @@ export function ChatbotConversation({ sessionId, onFinished, endpoint, finishLab
 
   const nextQuery = useQuery({
     queryKey: [...queryKeys.chatbotNext(sessionId), basePath],
-    queryFn: () => request<NextResponse>(`${basePath}/next`),
+    queryFn: () => request<NextResponse>(`${basePath}/next`, { candidateToken }),
   });
 
   const answerMutation = useMutation({
     mutationFn: async (payload: { questionId: string; value: unknown; prompt: string; answerLabel: string }) => {
       await request(`${basePath}/answers`, {
         method: 'POST',
+        candidateToken,
         body: JSON.stringify({ questionId: payload.questionId, value: payload.value }),
       });
       return payload;

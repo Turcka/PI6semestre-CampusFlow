@@ -7,6 +7,7 @@ import { domainEvents } from '../../utils/events.js';
 import { mapRpcError } from '../../utils/map-rpc-error.js';
 import { paginatedResponse, parsePagination } from '../../utils/pagination.js';
 import { parseTstzrange } from '../../utils/tstzrange.js';
+import { readAiInsights } from '../chatbot/assistant/insights.js';
 import type {
   assignVisitSchema,
   cancelVisitSchema,
@@ -103,7 +104,7 @@ export async function getVisit(req: Request, visitId: string) {
     .from('visits')
     .select(
       `*,
-      candidates(id, full_name, email, phone, profile_summary, preferred_focus, course_id),
+      candidates(id, full_name, email, phone, profile_summary, preferred_focus, course_id, ai_insights),
       visit_invitations(id, status, role, profile_id, expires_at),
       visit_itinerary_items(id, order_index, reason)`,
     )
@@ -200,7 +201,11 @@ export async function getBriefing(req: Request, visitId: string) {
     profile_summary?: string | null;
     behavioral_profile?: unknown;
     candidate_interests?: unknown;
+    ai_insights?: unknown;
   } | null;
+
+  // Promotor/professor recebem só os insights da conversa com o assistente — nunca a transcrição.
+  const insights = readAiInsights(candidate?.ai_insights);
 
   return {
     visitId: visit.id,
@@ -213,6 +218,20 @@ export async function getBriefing(req: Request, visitId: string) {
           profileSummary: candidate.profile_summary,
           behavioralProfile: candidate.behavioral_profile,
           interests: candidate.candidate_interests,
+          aiInsights: insights
+            ? {
+                priorities: insights.priorities,
+                goals: insights.goals,
+                doubts: insights.doubts,
+                objections: insights.objections,
+                decisionStage: insights.decisionStage,
+                influencers: insights.influencers,
+                schoolMoment: insights.schoolMoment,
+                decisionTimeline: insights.decisionTimeline,
+                suggestedFocus: insights.suggestedFocus,
+                talkingPoints: insights.talkingPoints,
+              }
+            : null,
         }
       : null,
     itinerary: visit.visit_itinerary_items ?? [],

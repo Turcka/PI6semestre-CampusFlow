@@ -29,12 +29,22 @@ export type CampusPublic = {
   address: string | null;
   tenant_id: string;
   tenants?: { name?: string } | null;
+  /** Secretário virtual do tenant: se a conversa por IA está ativa e o nome da persona. */
+  assistant?: { enabled: boolean; personaName: string } | null;
   courses: Array<{ id: string; name: string; code: string | null; description: string | null }>;
 };
 
+export type SessionMode = 'guided' | 'llm';
+
 type Props = {
   campusSlug: string;
-  onRegistered: (payload: { sessionId: string; portalToken: string; candidateId: string; campusId: string }) => void;
+  onRegistered: (payload: {
+    sessionId: string;
+    portalToken: string;
+    candidateId: string;
+    campusId: string;
+    mode: SessionMode;
+  }) => void;
 };
 
 export function RegisterStep({ campusSlug, onRegistered }: Props) {
@@ -66,7 +76,7 @@ export function RegisterStep({ campusSlug, onRegistered }: Props) {
       if (!campusQuery.data) return;
 
       const phone = phoneToE164(values.phone);
-      const result = await publicApi<{ sessionId: string; portalToken: string; candidateId: string }>('/candidates', {
+      const result = await publicApi<{ sessionId: string; portalToken: string; candidateId: string; mode?: SessionMode }>('/candidates', {
         method: 'POST',
         body: JSON.stringify({
           fullName: values.fullName,
@@ -82,6 +92,7 @@ export function RegisterStep({ campusSlug, onRegistered }: Props) {
 
       onRegistered({
         ...result,
+        mode: result.mode === 'llm' ? 'llm' : 'guided',
         campusId: campusQuery.data.id,
       });
     } catch (err) {
@@ -105,6 +116,12 @@ export function RegisterStep({ campusSlug, onRegistered }: Props) {
           {campus.name}
           {campus.address ? ` · ${campus.address}` : ''}
         </p>
+        {campus.assistant?.enabled ? (
+          <p className="mt-3 rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900">
+            Depois do cadastro, você vai conversar com {campus.assistant.personaName}, assistente virtual da secretaria, para
+            personalizarmos a sua visita.
+          </p>
+        ) : null}
       </div>
 
       <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
@@ -158,12 +175,17 @@ export function RegisterStep({ campusSlug, onRegistered }: Props) {
         </div>
         <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
           <input type="checkbox" className="mt-1" {...form.register('lgpdConsent')} />
-          <span>Li e aceito o tratamento dos meus dados para agendamento da visita (LGPD).</span>
+          <span>
+            Li e aceito o tratamento dos meus dados para agendamento da visita (LGPD). Estou ciente de que parte do atendimento
+            pode ser feita por um assistente virtual de inteligência artificial e de que as mensagens da conversa podem ser
+            processadas por um provedor externo. Os dados do cadastro (CPF, e-mail e telefone) não são enviados a esse
+            provedor.
+          </span>
         </label>
         <FieldError>{form.formState.errors.lgpdConsent?.message}</FieldError>
         <FieldError>{form.formState.errors.root?.message}</FieldError>
         <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Enviando…' : 'Continuar para o questionário'}
+          {form.formState.isSubmitting ? 'Enviando…' : campus.assistant?.enabled ? 'Continuar para a conversa' : 'Continuar para o questionário'}
         </Button>
       </form>
     </div>

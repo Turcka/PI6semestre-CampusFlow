@@ -10,6 +10,10 @@ export const analyticsFilterSchema = z.object({
   status: z.string().optional(),
 });
 
+export const prioritiesQuerySchema = z.object({
+  courseId: uuidSchema.optional(),
+});
+
 export const timeseriesQuerySchema = analyticsFilterSchema.extend({
   metric: z.enum(['visits', 'confirmed', 'completed', 'absent', 'cancelled']).default('visits'),
 });

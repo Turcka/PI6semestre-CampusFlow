@@ -11,6 +11,10 @@ export const getById = asyncHandler(async (req: Request, res: Response) => {
   res.json(await candidatesService.getCandidate(req, req.params.id!));
 });
 
+export const getTranscript = asyncHandler(async (req: Request, res: Response) => {
+  res.json(await candidatesService.getCandidateTranscript(req, req.params.id!));
+});
+
 export const patch = asyncHandler(async (req: Request, res: Response) => {
   res.json(await candidatesService.updateCandidate(req, req.params.id!, req.body));
 });

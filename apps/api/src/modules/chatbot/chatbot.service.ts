@@ -1,9 +1,12 @@
-﻿import type { Request } from 'express';
+﻿import type { AiInsights } from '@campusflow/shared';
+import type { Request } from 'express';
 import type { z } from 'zod';
 
+import { logger } from '../../config/logger.js';
 import { getAdminClient } from '../../config/supabase.js';
 import { AppError } from '../../utils/app-error.js';
 import { mapRpcError } from '../../utils/map-rpc-error.js';
+import { synthesize } from './assistant/assistant.service.js';
 import type {
   answerSchema,
   createQuestionSchema,
@@ -13,7 +16,8 @@ import type {
   updateInterestCategorySchema,
   updateQuestionSchema,
 } from './chatbot.schemas.js';
-import { buildCandidateProfile, type ProfileQuestion } from './profile-builder.js';
+import { getSession, getSessionQuestions, type SessionExpectation } from './chatbot.session.js';
+import { buildCandidateProfile } from './profile-builder.js';
 
 type AnswerInput = z.infer<typeof answerSchema>;
 type CreateQuestion = z.infer<typeof createQuestionSchema>;
@@ -23,74 +27,15 @@ type ListQuestionsQuery = z.infer<typeof listQuestionsQuerySchema>;
 type CategoryInput = z.infer<typeof interestCategorySchema>;
 type CategoryPatch = z.infer<typeof updateInterestCategorySchema>;
 
-export type SessionAudience = 'candidato' | 'promotor';
-export type SessionRow = {
-  id: string;
-  tenant_id: string;
-  candidate_id: string | null;
-  profile_id: string | null;
-  audience: SessionAudience;
-  status: string;
-};
-type QuestionRow = ProfileQuestion & { order_index: number; is_required: boolean; is_active: boolean };
+export { getSession, getSessionQuestions } from './chatbot.session.js';
+export type { QuestionRow, SessionAudience, SessionExpectation, SessionRow } from './chatbot.session.js';
 
 function requireUser(req: Request) {
   if (!req.user || !req.supabase) throw AppError.unauthorized();
   return { user: req.user, supabase: req.supabase };
 }
 
-/**
- * Carrega a sessão. Quando `expected` é informado, garante a audiência (e, para promotor,
- * que a sessão pertence ao `ownerProfileId`) — evita que um promotor responda a sessão de outro.
- */
-export async function getSession(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
-  const admin = getAdminClient();
-  const { data, error } = await admin
-    .from('chatbot_sessions')
-    .select('id, tenant_id, candidate_id, profile_id, audience, status')
-    .eq('id', sessionId)
-    .maybeSingle();
-  if (error) throw AppError.badRequest(error.message);
-  if (!data) throw AppError.notFound('Sessão do chatbot não encontrada.');
-  const session = data as SessionRow;
-  if (expected && session.audience !== expected.audience) {
-    throw AppError.notFound('Sessão do chatbot não encontrada.');
-  }
-  if (expected?.ownerProfileId && session.profile_id !== expected.ownerProfileId) {
-    throw AppError.forbidden('Esta sessão pertence a outro usuário.');
-  }
-  return session;
-}
-
-async function getSessionQuestions(session: SessionRow) {
-  const admin = getAdminClient();
-
-  let courseId: string | null = null;
-  if (session.audience === 'candidato' && session.candidate_id) {
-    const { data: candidate, error: candidateError } = await admin
-      .from('candidates')
-      .select('course_id')
-      .eq('id', session.candidate_id)
-      .maybeSingle();
-    if (candidateError) throw AppError.badRequest(candidateError.message);
-    courseId = candidate?.course_id ?? null;
-  }
-
-  let q = admin
-    .from('chatbot_questions')
-    .select('id, key, prompt, kind, options, order_index, is_required, is_active')
-    .eq('tenant_id', session.tenant_id)
-    .eq('audience', session.audience)
-    .eq('is_active', true)
-    .order('order_index');
-  q = courseId ? q.or(`course_id.is.null,course_id.eq.${courseId}`) : q.is('course_id', null);
-
-  const { data, error } = await q;
-  if (error) throw AppError.badRequest(error.message);
-  return ((data ?? []) as QuestionRow[]).filter((question) => question.key !== 'disponibilidade');
-}
-
-export async function getNextQuestion(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
+export async function getNextQuestion(sessionId: string, expected?: SessionExpectation) {
   const admin = getAdminClient();
   const session = await getSession(sessionId, expected);
   if (session.status === 'completed') return { question: null, progress: 1, isLast: true };
@@ -111,11 +56,7 @@ export async function getNextQuestion(sessionId: string, expected?: { audience: 
   };
 }
 
-export async function saveAnswer(
-  sessionId: string,
-  input: AnswerInput,
-  expected?: { audience: SessionAudience; ownerProfileId?: string },
-) {
+export async function saveAnswer(sessionId: string, input: AnswerInput, expected?: SessionExpectation) {
   const admin = getAdminClient();
   const session = await getSession(sessionId, expected);
   if (session.status === 'completed') throw AppError.conflict('SESSION_COMPLETED', 'Sessão do chatbot já foi concluída.');
@@ -134,7 +75,7 @@ export async function saveAnswer(
   return data;
 }
 
-export async function reviewSession(sessionId: string, expected?: { audience: SessionAudience; ownerProfileId?: string }) {
+export async function reviewSession(sessionId: string, expected?: SessionExpectation) {
   const admin = getAdminClient();
   const session = await getSession(sessionId, expected);
   const { data, error } = await admin
@@ -153,20 +94,35 @@ export async function reviewSession(sessionId: string, expected?: { audience: Se
   return { session, answers: data ?? [], preview };
 }
 
-export async function completeSession(sessionId: string) {
+export async function completeSession(sessionId: string, candidateToken?: string) {
   const admin = getAdminClient();
-  await getSession(sessionId, { audience: 'candidato' });
+  await getSession(sessionId, { audience: 'candidato', candidateToken });
   const { data, error } = await admin.rpc('build_candidate_profile', { p_session_id: sessionId });
   if (error) mapRpcError(error);
 
   const candidate = data as { id: string; profile_summary?: string | null; preferred_focus?: string | null };
+
+  // Síntese do secretário virtual: só roda se houve conversa. Qualquer falha mantém o resumo
+  // determinístico gravado por build_candidate_profile — a conclusão nunca fica bloqueada pela LLM.
+  let summary = candidate.profile_summary ?? null;
+  let insights: AiInsights | null = null;
+  try {
+    const synthesis = await synthesize(sessionId);
+    if (synthesis) {
+      summary = synthesis.summary;
+      insights = synthesis.insights;
+    }
+  } catch (err) {
+    logger.warn({ sessionId, reason: err instanceof Error ? err.message : 'erro desconhecido' }, 'Síntese do secretário virtual falhou');
+  }
+
   const { data: interests } = await admin
     .from('candidate_interests')
     .select('score, interest_categories(id, slug, name)')
     .eq('candidate_id', candidate.id)
     .order('score', { ascending: false });
 
-  return { candidateId: candidate.id, summary: candidate.profile_summary ?? null, focus: candidate.preferred_focus ?? null, interests: interests ?? [] };
+  return { candidateId: candidate.id, summary, focus: candidate.preferred_focus ?? null, interests: interests ?? [], insights };
 }
 
 export async function listQuestions(req: Request, query: ListQuestionsQuery) {

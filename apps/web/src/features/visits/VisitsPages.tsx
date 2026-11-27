@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { Badge, Button, Card, EmptyState, PageHeader, ScoreBar, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { InsightsPanel, type CandidateInsights } from '@/features/chatbot/InsightsPanel';
 import { ApiError, v1Api } from '@/lib/api';
 import { formatDateTime, parseTstzrange } from '@/lib/format';
 import { queryKeys } from '@/lib/query-keys';
@@ -112,6 +113,8 @@ export function VisitBriefingPage({ visitId }: { visitId: string }) {
           preferredFocus?: string | null;
           profileSummary?: string | null;
           interests?: unknown;
+          /** Insights da conversa com o secretário virtual; `null` quando o candidato respondeu por botões. */
+          aiInsights?: CandidateInsights | null;
         } | null;
         itinerary: unknown[];
         professorId: string | null;
@@ -136,6 +139,7 @@ export function VisitBriefingPage({ visitId }: { visitId: string }) {
         ) : null}
         {data.professorId ? <p className="text-sm text-slate-600">Professor vinculado a esta visita.</p> : null}
       </Card>
+      {data.candidate?.aiInsights ? <InsightsPanel insights={data.candidate.aiInsights} /> : null}
       <Card>
         <h3 className="mb-2 font-semibold">Roteiro</h3>
         {(data.itinerary as unknown[]).length ? (

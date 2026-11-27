@@ -18,6 +18,11 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         fetch: 'readonly',
+        // Globais do Node que acompanham o fetch nativo (usados em integrations/llm).
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        Headers: 'readonly',
+        Response: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
       },

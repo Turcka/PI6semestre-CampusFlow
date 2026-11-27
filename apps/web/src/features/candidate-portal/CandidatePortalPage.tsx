@@ -20,6 +20,7 @@ type CandidateMe = {
   portal_token: string;
   campus_slug: string | null;
   session_id: string | null;
+  session_mode?: 'guided' | 'llm' | null;
 };
 
 type CandidateVisit = {
@@ -259,6 +260,7 @@ export function CandidatePortalPage() {
                   campusSlug,
                   step: resumeStep,
                   profileSummary: me.profile_summary,
+                  mode: me.session_mode === 'llm' ? 'llm' : 'guided',
                 });
                 navigate(`/visita/${campusSlug}`);
               }}

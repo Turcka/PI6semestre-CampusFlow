@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** `LLM_BASE_URL=` (vazio no .env) deve valer como "não definido", não como URL inválida. */
+const emptyToUndefined = (value: unknown) => (typeof value === 'string' && value.trim() === '' ? undefined : value);
+
 /**
  * Validação das variáveis de ambiente com zod.
  * Falha rápido na inicialização se algo obrigatório estiver ausente.
@@ -42,6 +45,23 @@ const envSchema = z.object({
   QUEUE_MAX_RETRIES: z.coerce.number().int().positive().default(5),
 
   MAPBOX_ACCESS_TOKEN: z.string().optional(),
+
+  // Secretário virtual (LLM). Só liga com LLM_ENABLED=true e LLM_API_KEY definidos.
+  LLM_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  LLM_PROVIDER: z.preprocess(
+    emptyToUndefined,
+    z.enum(['openai', 'anthropic', 'gemini', 'openai_compatible']).default('openai'),
+  ),
+  LLM_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  LLM_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  LLM_MODEL: z.preprocess(emptyToUndefined, z.string().default('gpt-4o-mini')),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(12000),
+  LLM_MAX_TURNS: z.coerce.number().int().positive().default(16),
+  LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(400),
+  LLM_SESSION_TOKEN_BUDGET: z.coerce.number().int().positive().default(40000),
 
   ALLOW_PORTAL_EMAIL_LOOKUP: z
     .string()
